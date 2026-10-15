@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"photo-backup/internal/backup"
 	"photo-backup/internal/database"
 	"photo-backup/internal/models"
 	"photo-backup/internal/repository"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type App struct {
@@ -161,7 +162,6 @@ func (a *App) GetRecentPhotos(limit int) []PhotoSummary {
 	return result
 }
 
-
 // SelectDestFolder เปิด Dialog เลือกโฟลเดอร์ปลายทางสำหรับ Backup
 func (a *App) SelectDestFolder() (string, error) {
 	if a.ctx == nil {
@@ -171,6 +171,7 @@ func (a *App) SelectDestFolder() (string, error) {
 		Title: "เลือกโฟลเดอร์สำหรับเก็บรูปภาพ Backup",
 	})
 }
+
 // StartBackup คัดลอกรูปจาก sourcePath ไป destPath
 // แล้วบันทึกข้อมูลลง SQLite พร้อมส่ง Progress ผ่าน Wails Events
 func (a *App) StartBackup(sourcePath string, destPath string) (backup.BackupSummary, error) {
@@ -213,6 +214,7 @@ func (a *App) StartBackup(sourcePath string, destPath string) (backup.BackupSumm
 	}
 	return summary, nil
 }
+
 // GetBackupFolder คืนค่าตำแหน่ง Backup เริ่มต้น (สำหรับแนะนำ path ให้ผู้ใช้)
 func (a *App) GetBackupFolder() string {
 	home, err := os.UserHomeDir()
@@ -220,4 +222,89 @@ func (a *App) GetBackupFolder() string {
 		return ""
 	}
 	return filepath.Join(home, "PhotoBackup")
+}
+
+type TagCloudItem struct {
+	ID         uint   `json:"id"`
+	Name       string `json:"name"`
+	PhotoCount int64  `json:"photoCount"`
+}
+
+type TaggedPhotoSummary struct {
+	ID           uint         `json:"id"`
+	OriginalName string       `json:"originalName"`
+	BackupPath   string       `json:"backupPath"`
+	BackedUpAt   string       `json:"backedUpAt"`
+	Tags         []TagSummary `json:"tags"`
+}
+
+func (a *App) GetTaggedPhotos() ([]TaggedPhotoSummary, error) {
+	if a.repo == nil {
+		return nil, fmt.Errorf("database is not ready")
+	}
+
+	// ListPhotos() มี Preload("Tags") อยู่แล้ว
+	photos, err := a.repo.ListPhotos()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]TaggedPhotoSummary, 0, len(photos))
+	for _, photo := range photos {
+		tags := make([]TagSummary, 0, len(photo.Tags))
+		for _, tag := range photo.Tags {
+			tags = append(tags, TagSummary{ID: tag.ID, Name: tag.Name})
+		}
+
+		result = append(result, TaggedPhotoSummary{
+			ID:           photo.ID,
+			OriginalName: photo.OriginalName,
+			BackupPath:   photo.BackupPath,
+			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
+			Tags:         tags,
+		})
+	}
+	return result, nil
+}
+
+func (a *App) AddTagToPhotos(photoIDs []uint, name string) (TagSummary, error) {
+	if a.repo == nil {
+		return TagSummary{}, fmt.Errorf("database is not ready")
+	}
+
+	tag, err := a.repo.AddTagToPhotos(photoIDs, name)
+	if err != nil {
+		return TagSummary{}, err
+	}
+
+	return TagSummary{ID: tag.ID, Name: tag.Name}, nil
+}
+
+func (a *App) RemoveTagFromPhoto(photoID, tagID uint) error {
+	if a.repo == nil {
+		return fmt.Errorf("database is not ready")
+	}
+
+	return a.repo.RemoveTagFromPhoto(photoID, tagID)
+}
+
+func (a *App) GetTagCloud() ([]TagCloudItem, error) {
+	if a.repo == nil {
+		return nil, fmt.Errorf("database is not ready")
+	}
+
+	tags, err := a.repo.GetTagCloud()
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]TagCloudItem, 0, len(tags))
+	for _, tag := range tags {
+		result = append(result, TagCloudItem{
+			ID:         tag.ID,
+			Name:       tag.Name,
+			PhotoCount: tag.PhotoCount,
+		})
+	}
+	return result, nil
 }

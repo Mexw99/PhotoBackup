@@ -5,29 +5,69 @@
     </div>
     <div v-else class="grid">
       <div v-for="photo in photos" :key="photo.id" class="photo-card">
+        <input
+          type="checkbox"
+          :checked="selectedIDs.includes(photo.id)"
+          @change="togglePhoto(photo.id, ($event.target as HTMLInputElement).checked)"
+        />
         <div class="photo-icon">📷</div>
         <div class="photo-info">
           <strong>{{ photo.originalName }}</strong>
           <small>{{ photo.backedUpAt }}</small>
           <small class="path">{{ photo.backupPath }}</small>
         </div>
+        <div class="photo-tags">
+  <span v-for="tag in photo.tags" :key="tag.id" class="tag-chip">
+    #{{ tag.name }}
+    <button
+      type="button"
+      @click="emit('remove-tag', photo.id, tag.id)"
+    >
+    ×
+    </button>
+  </span>
+  <span v-if="!photo.tags.length">ยังไม่มี Tag</span>
+</div>
       </div>
     </div>
   </div>
+  
 </template>
 
 <script setup lang="ts">
-interface PhotoItem {
-  id: number;
-  originalName: string;
-  backupPath: string;
-  backedUpAt: string;
+
+interface TagItem {
+  id: number
+  name: string
 }
 
-defineProps<{
-  photos: PhotoItem[];
-  emptyText?: string;
-}>();
+interface PhotoItem {
+  id: number
+  originalName: string
+  backupPath: string
+  backedUpAt: string
+  tags: TagItem[]
+}
+
+const props = defineProps<{
+  photos: PhotoItem[]
+  emptyText?: string
+  selectedIDs: number[]
+}>()
+
+const emit = defineEmits<{
+  "update:selectedIDs": [ids: number[]]
+  "remove-tag": [photoID: number, tagID: number]
+}>()
+
+function togglePhoto(photoID: number, checked: boolean) {
+  const next = new Set(props.selectedIDs)
+
+  if (checked) next.add(photoID)
+  else next.delete(photoID)
+
+  emit("update:selectedIDs", [...next])
+}
 </script>
 
 <style scoped>
@@ -85,8 +125,28 @@ defineProps<{
   color: #64748b;
   font-size: 12px;
 }
+.photo-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
 
+.tag-chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.tag-chip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
 .path {
   overflow-wrap: anywhere;
 }
+
 </style>

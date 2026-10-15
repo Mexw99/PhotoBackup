@@ -3,6 +3,8 @@
 import {main} from '../models';
 import {backup} from '../models';
 
+export function AddTagToPhotos(arg1:Array<number>,arg2:string):Promise<main.TagSummary>;
+
 export function GetBackupFolder():Promise<string>;
 
 export function GetDatabasePath():Promise<string>;
@@ -13,13 +15,19 @@ export function GetPhotoCount():Promise<number>;
 
 export function GetRecentPhotos(arg1:number):Promise<Array<main.PhotoSummary>>;
 
+export function GetTagCloud():Promise<Array<main.TagCloudItem>>;
+
 export function GetTagCount():Promise<number>;
+
+export function GetTaggedPhotos():Promise<Array<main.TaggedPhotoSummary>>;
 
 export function GetTags():Promise<Array<main.TagSummary>>;
 
 export function Greet(arg1:string):Promise<string>;
 
 export function ListImageFiles(arg1:string):Promise<Array<backup.ImageFile>>;
+
+export function RemoveTagFromPhoto(arg1:number,arg2:number):Promise<void>;
 
 export function SelectDestFolder():Promise<string>;
 

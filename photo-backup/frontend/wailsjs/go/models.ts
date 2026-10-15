@@ -97,6 +97,22 @@ export namespace main {
 	        this.backedUpAt = source["backedUpAt"];
 	    }
 	}
+	export class TagCloudItem {
+	    id: number;
+	    name: string;
+	    photoCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TagCloudItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.photoCount = source["photoCount"];
+	    }
+	}
 	export class TagSummary {
 	    id: number;
 	    name: string;
@@ -110,6 +126,44 @@ export namespace main {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	    }
+	}
+	export class TaggedPhotoSummary {
+	    id: number;
+	    originalName: string;
+	    backupPath: string;
+	    backedUpAt: string;
+	    tags: TagSummary[];
+	
+	    static createFrom(source: any = {}) {
+	        return new TaggedPhotoSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.originalName = source["originalName"];
+	        this.backupPath = source["backupPath"];
+	        this.backedUpAt = source["backedUpAt"];
+	        this.tags = this.convertValues(source["tags"], TagSummary);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
