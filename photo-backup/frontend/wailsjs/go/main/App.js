@@ -29,3 +29,11 @@ export function GetTags() {
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
+
+export function ListImageFiles(arg1) {
+  return window['go']['main']['App']['ListImageFiles'](arg1);
+}
+
+export function SelectSourceFolder() {
+  return window['go']['main']['App']['SelectSourceFolder']();
+}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"photo-backup/internal/backup"
 	"photo-backup/internal/database"
 	"photo-backup/internal/repository"
 )
@@ -42,6 +44,21 @@ func (a *App) shutdown(_ context.Context) {
 
 func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
+}
+
+// SelectSourceFolder opens the native folder picker for the image source.
+func (a *App) SelectSourceFolder() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("application is not ready")
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "เลือกโฟลเดอร์รูปภาพต้นทาง",
+	})
+}
+
+// ListImageFiles previews supported images before the copy operation is started.
+func (a *App) ListImageFiles(sourcePath string) ([]backup.ImageFile, error) {
+	return backup.DiscoverImages(sourcePath)
 }
 
 func (a *App) GetDatabaseStatus() string {
