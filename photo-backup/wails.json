@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "photo-backup",
+  "outputfilename": "photo-backup",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run generate",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Mexw99",
+    "email": "monruthaikhumpa@gmail.com"
+  }
+}
