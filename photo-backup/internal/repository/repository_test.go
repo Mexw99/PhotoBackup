@@ -161,3 +161,90 @@ func TestGetTagCloudCountsAndSortsByPhotoCount(t *testing.T) {
 		t.Errorf("second tag = %#v, want family with 1 photo", tags[1])
 	}
 }
+
+func TestSearchPhotosByTags(t *testing.T) {
+	repo := newTestRepository(t)
+	photo1 := createTestPhoto(t, repo, "beach1.jpg")
+	photo2 := createTestPhoto(t, repo, "mountain1.jpg")
+	photo3 := createTestPhoto(t, repo, "both.jpg")
+
+	// photo1: "beach"
+	if _, err := repo.AddTagToPhotos([]uint{photo1.ID}, "beach"); err != nil {
+		t.Fatalf("add beach tag to photo1: %v", err)
+	}
+	// photo2: "mountain"
+	if _, err := repo.AddTagToPhotos([]uint{photo2.ID}, "mountain"); err != nil {
+		t.Fatalf("add mountain tag to photo2: %v", err)
+	}
+	// photo3: "beach" and "mountain"
+	if _, err := repo.AddTagToPhotos([]uint{photo3.ID}, "beach"); err != nil {
+		t.Fatalf("add beach tag to photo3: %v", err)
+	}
+	if _, err := repo.AddTagToPhotos([]uint{photo3.ID}, "mountain"); err != nil {
+		t.Fatalf("add mountain tag to photo3: %v", err)
+	}
+
+	t.Run("EmptyQueryReturnsAllPhotos", func(t *testing.T) {
+		res, err := repo.SearchPhotosByTags([]string{}, "OR")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 3 {
+			t.Errorf("got %d photos, want 3", len(res))
+		}
+	})
+
+	t.Run("SingleTagCaseInsensitiveWithSpaces", func(t *testing.T) {
+		res, err := repo.SearchPhotosByTags([]string{"  BEACH  "}, "OR")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// photo1 and photo3 have "beach"
+		if len(res) != 2 {
+			t.Fatalf("got %d photos, want 2", len(res))
+		}
+		for _, p := range res {
+			if p.ID != photo1.ID && p.ID != photo3.ID {
+				t.Errorf("unexpected photo ID %d in results", p.ID)
+			}
+		}
+	})
+
+	t.Run("ModeORMatchesAnyTag", func(t *testing.T) {
+		res, err := repo.SearchPhotosByTags([]string{"beach", "mountain"}, "OR")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// photo1, photo2, photo3 all match
+		if len(res) != 3 {
+			t.Errorf("got %d photos, want 3", len(res))
+		}
+	})
+
+	t.Run("ModeANDMatchesAllTags", func(t *testing.T) {
+		res, err := repo.SearchPhotosByTags([]string{"beach", "mountain"}, "AND")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		// Only photo3 has both "beach" and "mountain"
+		if len(res) != 1 {
+			t.Fatalf("got %d photos, want 1", len(res))
+		}
+		if res[0].ID != photo3.ID {
+			t.Errorf("photo ID = %d, want %d", res[0].ID, photo3.ID)
+		}
+		if len(res[0].Tags) != 2 {
+			t.Errorf("preloaded tags count = %d, want 2", len(res[0].Tags))
+		}
+	})
+
+	t.Run("NotFoundReturnsEmptyWithoutError", func(t *testing.T) {
+		res, err := repo.SearchPhotosByTags([]string{"nonexistent"}, "OR")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(res) != 0 {
+			t.Errorf("got %d photos, want 0", len(res))
+		}
+	})
+}

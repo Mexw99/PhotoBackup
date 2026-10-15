@@ -308,3 +308,32 @@ func (a *App) GetTagCloud() ([]TagCloudItem, error) {
 	}
 	return result, nil
 }
+
+// SearchPhotos ค้นหารูปภาพด้วย Tag สำหรับ Wails Frontend
+func (a *App) SearchPhotos(tagNames []string, mode string) ([]TaggedPhotoSummary, error) {
+	if a.repo == nil {
+		return nil, fmt.Errorf("database is not ready")
+	}
+
+	photos, err := a.repo.SearchPhotosByTags(tagNames, mode)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]TaggedPhotoSummary, 0, len(photos))
+	for _, photo := range photos {
+		tags := make([]TagSummary, 0, len(photo.Tags))
+		for _, tag := range photo.Tags {
+			tags = append(tags, TagSummary{ID: tag.ID, Name: tag.Name})
+		}
+
+		result = append(result, TaggedPhotoSummary{
+			ID:           photo.ID,
+			OriginalName: photo.OriginalName,
+			BackupPath:   photo.BackupPath,
+			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
+			Tags:         tags,
+		})
+	}
+	return result, nil
+}

@@ -54,6 +54,10 @@ export function RemoveTagFromPhoto(arg1, arg2) {
   return window['go']['main']['App']['RemoveTagFromPhoto'](arg1, arg2);
 }
 
+export function SearchPhotos(arg1, arg2) {
+  return window['go']['main']['App']['SearchPhotos'](arg1, arg2);
+}
+
 export function SelectDestFolder() {
   return window['go']['main']['App']['SelectDestFolder']();
 }

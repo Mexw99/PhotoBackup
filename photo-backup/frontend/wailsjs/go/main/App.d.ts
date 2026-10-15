@@ -29,6 +29,8 @@ export function ListImageFiles(arg1:string):Promise<Array<backup.ImageFile>>;
 
 export function RemoveTagFromPhoto(arg1:number,arg2:number):Promise<void>;
 
+export function SearchPhotos(arg1:Array<string>,arg2:string):Promise<Array<main.TaggedPhotoSummary>>;
+
 export function SelectDestFolder():Promise<string>;
 
 export function SelectSourceFolder():Promise<string>;
