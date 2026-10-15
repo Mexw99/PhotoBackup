@@ -3,6 +3,8 @@
 import {main} from '../models';
 import {backup} from '../models';
 
+export function GetBackupFolder():Promise<string>;
+
 export function GetDatabasePath():Promise<string>;
 
 export function GetDatabaseStatus():Promise<string>;
@@ -19,4 +21,8 @@ export function Greet(arg1:string):Promise<string>;
 
 export function ListImageFiles(arg1:string):Promise<Array<backup.ImageFile>>;
 
+export function SelectDestFolder():Promise<string>;
+
 export function SelectSourceFolder():Promise<string>;
+
+export function StartBackup(arg1:string,arg2:string):Promise<backup.BackupSummary>;

@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"photo-backup/internal/backup"
 	"photo-backup/internal/database"
+	"photo-backup/internal/models"
 	"photo-backup/internal/repository"
 )
 
@@ -155,4 +159,65 @@ func (a *App) GetRecentPhotos(limit int) []PhotoSummary {
 	}
 
 	return result
+}
+
+
+// SelectDestFolder เปิด Dialog เลือกโฟลเดอร์ปลายทางสำหรับ Backup
+func (a *App) SelectDestFolder() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("application is not ready")
+	}
+	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "เลือกโฟลเดอร์สำหรับเก็บรูปภาพ Backup",
+	})
+}
+// StartBackup คัดลอกรูปจาก sourcePath ไป destPath
+// แล้วบันทึกข้อมูลลง SQLite พร้อมส่ง Progress ผ่าน Wails Events
+func (a *App) StartBackup(sourcePath string, destPath string) (backup.BackupSummary, error) {
+	if a.repo == nil {
+		return backup.BackupSummary{}, fmt.Errorf("database is not connected")
+	}
+	// 1. ค้นหารูปในโฟลเดอร์ต้นทาง
+	images, err := backup.DiscoverImages(sourcePath)
+	if err != nil {
+		return backup.BackupSummary{}, err
+	}
+	if len(images) == 0 {
+		return backup.BackupSummary{}, fmt.Errorf("ไม่พบรูปภาพในโฟลเดอร์ที่เลือก")
+	}
+	// 2. คัดลอกไฟล์ + ส่ง Progress event ไปให้ Frontend
+	summary := backup.CopyFiles(images, destPath, func(current int, total int, name string) {
+		// ส่ง event ให้ Frontend อัปเดต Progress bar
+		runtime.EventsEmit(a.ctx, "backup:progress", map[string]interface{}{
+			"current": current,
+			"total":   total,
+			"name":    name,
+		})
+	})
+	// 3. บันทึกรูปที่ copy สำเร็จลง SQLite
+	for _, result := range summary.Results {
+		if !result.Success {
+			continue
+		}
+		photo := &models.Photo{
+			OriginalName: result.OriginalName,
+			OriginalPath: result.OriginalPath,
+			BackupPath:   result.BackupPath,
+			FileSize:     result.FileSize,
+			BackedUpAt:   time.Now(),
+		}
+		if dbErr := a.repo.CreatePhoto(photo); dbErr != nil {
+			// ถ้าบันทึก DB ไม่ได้ ไม่หยุดทั้งหมด แค่ log ไว้
+			fmt.Printf("Warning: save photo to db failed: %s\n", dbErr.Error())
+		}
+	}
+	return summary, nil
+}
+// GetBackupFolder คืนค่าตำแหน่ง Backup เริ่มต้น (สำหรับแนะนำ path ให้ผู้ใช้)
+func (a *App) GetBackupFolder() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, "PhotoBackup")
 }

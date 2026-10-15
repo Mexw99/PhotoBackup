@@ -1,5 +1,63 @@
 export namespace backup {
 	
+	export class BackupResult {
+	    originalName: string;
+	    originalPath: string;
+	    backupPath: string;
+	    fileSize: number;
+	    success: boolean;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.originalName = source["originalName"];
+	        this.originalPath = source["originalPath"];
+	        this.backupPath = source["backupPath"];
+	        this.fileSize = source["fileSize"];
+	        this.success = source["success"];
+	        this.error = source["error"];
+	    }
+	}
+	export class BackupSummary {
+	    total: number;
+	    success: number;
+	    failed: number;
+	    results: BackupResult[];
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total = source["total"];
+	        this.success = source["success"];
+	        this.failed = source["failed"];
+	        this.results = this.convertValues(source["results"], BackupResult);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ImageFile {
 	    name: string;
 	    path: string;
