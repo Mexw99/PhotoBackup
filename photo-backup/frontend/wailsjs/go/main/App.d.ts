@@ -11,6 +11,8 @@ export function GetDatabasePath():Promise<string>;
 
 export function GetDatabaseStatus():Promise<string>;
 
+export function GetImageBase64(arg1:string):Promise<string>;
+
 export function GetPhotoCount():Promise<number>;
 
 export function GetRecentPhotos(arg1:number):Promise<Array<main.PhotoSummary>>;

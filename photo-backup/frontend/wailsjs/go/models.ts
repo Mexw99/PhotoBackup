@@ -84,6 +84,7 @@ export namespace main {
 	    originalName: string;
 	    backupPath: string;
 	    backedUpAt: string;
+	    thumbnail: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PhotoSummary(source);
@@ -95,6 +96,7 @@ export namespace main {
 	        this.originalName = source["originalName"];
 	        this.backupPath = source["backupPath"];
 	        this.backedUpAt = source["backedUpAt"];
+	        this.thumbnail = source["thumbnail"];
 	    }
 	}
 	export class TagCloudItem {
@@ -132,6 +134,7 @@ export namespace main {
 	    originalName: string;
 	    backupPath: string;
 	    backedUpAt: string;
+	    thumbnail: string;
 	    tags: TagSummary[];
 	
 	    static createFrom(source: any = {}) {
@@ -144,6 +147,7 @@ export namespace main {
 	        this.originalName = source["originalName"];
 	        this.backupPath = source["backupPath"];
 	        this.backedUpAt = source["backedUpAt"];
+	        this.thumbnail = source["thumbnail"];
 	        this.tags = this.convertValues(source["tags"], TagSummary);
 	    }
 	

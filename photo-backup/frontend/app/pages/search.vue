@@ -123,7 +123,13 @@
           @keydown.space.prevent="openPhotoDetail(photo)"
         >
           <div class="photo-icon-box">
-            <span class="camera-icon">📷</span>
+            <img
+              v-if="photo.thumbnail"
+              :src="photo.thumbnail"
+              class="photo-thumb"
+              :alt="photo.originalName"
+            />
+            <span v-else class="camera-icon">📷</span>
           </div>
 
           <div class="photo-card-info">
@@ -611,6 +617,13 @@ onMounted(() => {
   font-size: 24px;
   flex-shrink: 0;
   border: 1px solid #dbeafe;
+  overflow: hidden;
+}
+
+.photo-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .photo-card-info {

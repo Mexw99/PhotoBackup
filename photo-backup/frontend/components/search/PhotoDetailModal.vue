@@ -8,7 +8,13 @@
     >
       <div class="modal-card" role="dialog" aria-modal="true" :aria-label="photo.originalName">
         <header class="modal-header">
-          <div class="header-icon">📷</div>
+          <img
+            v-if="photo.thumbnail"
+            :src="photo.thumbnail"
+            class="header-thumb"
+            :alt="photo.originalName"
+          />
+          <div v-else class="header-icon">📷</div>
           <div class="header-info">
             <h3 class="modal-title">{{ photo.originalName }}</h3>
             <span class="modal-subtitle">ID รูปภาพ: #{{ photo.id }}</span>
@@ -24,6 +30,10 @@
         </header>
 
         <div class="modal-body">
+          <div v-if="photo.thumbnail" class="modal-image-preview">
+            <img :src="photo.thumbnail" :alt="photo.originalName" />
+          </div>
+
           <div class="detail-row">
             <span class="detail-label">ชื่อไฟล์ต้นฉบับ:</span>
             <span class="detail-value filename">{{ photo.originalName }}</span>
@@ -78,6 +88,7 @@ export interface PhotoDetailItem {
   originalName: string;
   backupPath: string;
   backedUpAt: string;
+  thumbnail?: string;
   tags: Array<{
     id: number;
     name: string;
@@ -153,6 +164,14 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.header-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .header-info {
   flex: 1;
   min-width: 0;
@@ -197,6 +216,24 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.modal-image-preview {
+  width: 100%;
+  max-height: 260px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+}
+
+.modal-image-preview img {
+  max-width: 100%;
+  max-height: 260px;
+  object-fit: contain;
 }
 
 .detail-row {

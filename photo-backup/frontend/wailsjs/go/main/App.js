@@ -18,6 +18,10 @@ export function GetDatabaseStatus() {
   return window['go']['main']['App']['GetDatabaseStatus']();
 }
 
+export function GetImageBase64(arg1) {
+  return window['go']['main']['App']['GetImageBase64'](arg1);
+}
+
 export function GetPhotoCount() {
   return window['go']['main']['App']['GetPhotoCount']();
 }
