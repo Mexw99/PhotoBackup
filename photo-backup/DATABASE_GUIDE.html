@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PhotoBackup - Complete Database Guide</title>
+  <link rel="stylesheet" href="DATABASE_GUIDE.css">
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="brand">PhotoBackup</div>
+      <p class="brand-subtitle">Complete Database & Architecture Guide</p>
+      <div class="search-box">
+        <input id="guide-search" type="search" placeholder="ค้นหาในเอกสาร...">
+      </div>
+      <nav>
+        <div class="sidebar-group-title">พื้นฐาน</div>
+        <a href="#overview">ภาพรวมระบบ</a>
+        <a href="#reading-order">ลำดับการอ่านโค้ด</a>
+        <a href="#file-map">แผนผังไฟล์</a>
+        <a href="#responsibility">แบ่งหน้าที่ไฟล์</a>
+        <div class="sidebar-group-title">Database</div>
+        <a href="#startup">ลำดับเปิดโปรแกรม</a>
+        <a href="#sqlite-path">ตำแหน่ง SQLite</a>
+        <a href="#connection">เปิด Connection</a>
+        <a href="#migration">AutoMigrate</a>
+        <a href="#models">Models</a>
+        <a href="#relations">Relationships</a>
+        <a href="#repository">Repository</a>
+        <div class="sidebar-group-title">Feature flow</div>
+        <a href="#wails">Wails API</a>
+        <a href="#dashboard">Dashboard</a>
+        <a href="#backup">Backup</a>
+        <a href="#tags">Tags</a>
+        <a href="#search">Search</a>
+        <a href="#tag-cloud">Tag Cloud</a>
+        <div class="sidebar-group-title">ใช้งานจริง</div>
+        <a href="#errors">Error handling</a>
+        <a href="#testing">Testing</a>
+        <a href="#git">Git / Commit</a>
+        <a href="#checklist">Checklist</a>
+      </nav>
+      <div class="toolbar">
+        <button id="toggle-dark" type="button">โหมดมืด</button>
+        <button id="print-guide" type="button">พิมพ์ / PDF</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="hero" id="overview">
+        <span class="badge">อ้างอิงจากโค้ดจริงใน photo-backup</span>
+        <h1>PhotoBackup<br>Complete Database & Architecture Guide</h1>
+        <p>
+          คู่มือฉบับละเอียดสำหรับทำความเข้าใจโปรเจกต์ PhotoBackup ตั้งแต่ Wails เปิดโปรแกรม,
+          SQLite ถูกสร้างตรงไหน, GORM แปลง Model เป็นตารางอย่างไร, Repository เขียน Query แบบไหน,
+          ไปจนถึงการไหลของข้อมูลจาก Nuxt ผ่าน Wails และกลับมาแสดงผลบนหน้าจอ
+        </p>
+        <div class="hero-meta">
+          Wails v2 · Go · Nuxt 4 · GORM · SQLite · ใช้ได้บน Windows และ macOS
+        </div>
+      </header>
+
+      <section class="section" id="reading-order">
+        <h2>0. วิธีอ่านเอกสารนี้</h2>
+        <p class="lead">
+          ถ้ายังไม่คุ้นกับโปรเจกต์ ให้เริ่มจากส่วนนี้ก่อน แล้วค่อยเปิดไฟล์จริงใน VS Code ตามลำดับ
+        </p>
+        <div class="grid grid-3">
+          <article class="card">
+            <span class="pill">ขั้นที่ 1</span>
+            <h3>เข้าใจเส้นทางข้อมูล</h3>
+            <p>
+              ผู้ใช้กดปุ่มใน Vue → Vue เรียก Wails Binding → Go Method ใน app.go ทำงาน →
+              Repository ใช้ GORM → SQLite คืนข้อมูล
+            </p>
+          </article>
+          <article class="card">
+            <span class="pill">ขั้นที่ 2</span>
+            <h3>เข้าใจ Model</h3>
+            <p>
+              Model คือโครงสร้างข้อมูลที่ GORM ใช้ตีความเป็นตาราง เช่น Photo และ Tag
+              รวมถึงความสัมพันธ์ many-to-many ผ่าน photo_tags
+            </p>
+          </article>
+          <article class="card">
+            <span class="pill">ขั้นที่ 3</span>
+            <h3>เข้าใจ Feature</h3>
+            <p>
+              ค่อยอ่าน Dashboard, Backup, Tags และ Search เพราะแต่ละหน้าจะใช้ API
+              ที่ต่อยอดจากชั้น Database เดียวกัน
+            </p>
+          </article>
+        </div>
+        <div class="diagram">
+          <div class="diagram-line">
+            <span class="diagram-node hot">User click</span>
+            →
+            <span class="diagram-node hot">Nuxt page</span>
+            →
+            <span class="diagram-node hot">wailsjs binding</span>
+            →
+            <span class="diagram-node hot">app.go</span>
+          </div>
+          <div class="diagram-line">
+            <br>
+            <span class="diagram-node">repository.go</span>
+            →
+            <span class="diagram-node hot">GORM</span>
+            →
+            <span class="diagram-node hot">photo-backup.db</span>
+            → result กลับทางเดิม
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="file-map">
+        <h2>1. แผนผังไฟล์ทั้งหมดที่เกี่ยวข้อง</h2>
+        <p class="lead">
+          ตารางนี้บอกว่าไฟล์แต่ละกลุ่มอยู่ตรงไหนและมีหน้าที่ระดับใดในระบบ
+        </p>
+        <div class="file-map">
+          <div class="file-row">
+            <code>main.go</code>
+            <strong>Wails entry point</strong>
+            <span>สร้าง App, เริ่ม Wails, ผูก OnStartup/OnShutdown และ Bind app</span>
+          </div>
+          <div class="file-row">
+            <code>app.go</code>
+            <strong>Application API</strong>
+            <span>เป็นประตูจาก Frontend เข้าสู่ Go: Database, Backup, Tag, Search</span>
+          </div>
+          <div class="file-row">
+            <code>wails.json</code>
+            <strong>Wails config</strong>
+            <span>กำหนดคำสั่ง install, build, dev watcher และชื่อไฟล์ output</span>
+          </div>
+          <div class="file-row">
+            <code>internal/database/database.go</code>
+            <strong>Database lifecycle</strong>
+            <span>หา Path, สร้าง directory, เปิด SQLite, AutoMigrate, Close</span>
+          </div>
+          <div class="file-row">
+            <code>internal/models/photo.go</code>
+            <strong>Photo schema</strong>
+            <span>นิยามคอลัมน์ของรูปภาพและความสัมพันธ์ Tags</span>
+          </div>
+          <div class="file-row">
+            <code>internal/models/tag.go</code>
+            <strong>Tag schema</strong>
+            <span>นิยามคอลัมน์ชื่อ Tag และความสัมพันธ์ Photos</span>
+          </div>
+          <div class="file-row">
+            <code>internal/repository/repository.go</code>
+            <strong>Data access layer</strong>
+            <span>คำสั่ง GORM ทั้งหมดที่คุยกับ SQLite</span>
+          </div>
+          <div class="file-row">
+            <code>internal/backup/</code>
+            <strong>Backup service</strong>
+            <span>ค้นหาไฟล์รูป, copy file และสรุปผลการ Backup</span>
+          </div>
+          <div class="file-row">
+            <code>frontend/app/app.vue</code>
+            <strong>Root UI</strong>
+            <span>Layout หลักและจุดวาง NuxtPage / Header</span>
+          </div>
+          <div class="file-row">
+            <code>frontend/app/pages/index.vue</code>
+            <strong>Dashboard</strong>
+            <span>สถานะ Database, จำนวนรูป, จำนวน Tag และรูปภาพล่าสุด</span>
+          </div>
+          <div class="file-row">
+            <code>frontend/app/pages/backup.vue</code>
+            <strong>Backup page</strong>
+            <span>เลือกต้นทาง/ปลายทาง, แสดง Progress และเริ่ม Backup</span>
+          </div>
+          <div class="file-row">
+            <code>frontend/app/pages/tags.vue</code>
+            <strong>Tag page</strong>
+            <span>เลือกหลายรูป, เพิ่ม/ลบ Tag และดู Tag Cloud</span>
+          </div>
+          <div class="file-row">
+            <code>frontend/app/pages/search.vue</code>
+            <strong>Search page</strong>
+            <span>ค้นหาหลาย Tag ด้วยโหมด AND/OR และแสดงรูปหลายรูป</span>
+          </div>
+          <div class="file-row">
+            <code>frontend/wailsjs/</code>
+            <strong>Generated binding</strong>
+            <span>ไฟล์ JavaScript/TypeScript ที่ Wails สร้างจาก Go API</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="responsibility">
+        <h2>2. หน้าที่ของแต่ละชั้น</h2>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>Frontend Layer</h3>
+            <p>
+              รับ input จากผู้ใช้ เช่น Path, ชื่อ Tag และตัวเลือก AND/OR
+              จากนั้นเรียกฟังก์ชันที่อยู่ใน <code>frontend/wailsjs/go/main/App.js</code>
+            </p>
+            <p class="muted">
+              Frontend ไม่ควรเปิดไฟล์ SQLite เอง และไม่ควรเขียน Query SQL เอง
+            </p>
+          </article>
+          <article class="card">
+            <h3>Wails Presentation Layer</h3>
+            <p>
+              <code>main.go</code> ทำให้ App object ถูก Bind ส่วน <code>app.go</code>
+              เป็น public method ที่ Wails แปลงเป็น JavaScript API
+            </p>
+            <p class="muted">
+              Layer นี้แปลงข้อมูลระหว่างโลกของ Vue และโลกของ Go
+            </p>
+          </article>
+          <article class="card">
+            <h3>Repository Layer</h3>
+            <p>
+              รวมคำสั่งอ่าน/เขียน Database ให้เป็นจุดเดียว ช่วยไม่ให้ app.go
+              เต็มไปด้วยรายละเอียด SQL และช่วยให้ Test ง่ายขึ้น
+            </p>
+          </article>
+          <article class="card">
+            <h3>Database Layer</h3>
+            <p>
+              ควบคุมตำแหน่งไฟล์, Connection, Migration และการปิด Resource
+              ไม่ควรเอา Business logic ของ Tag หรือ Search มาไว้ชั้นนี้
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="startup">
+        <h2>3. ลำดับการเปิดโปรแกรม</h2>
+        <p class="lead">
+          Database ถูกเปิดตอน Startup ก่อนที่ Dashboard จะเริ่มอ่านข้อมูล
+        </p>
+        <div class="flow">
+          <div class="flow-step"><strong>1. main.go</strong>สร้าง <code>app := NewApp()</code></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>2. wails.Run</strong>เริ่ม Desktop app</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>3. app.startup</strong>เก็บ context</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>4. OpenDefault</strong>หา Path SQLite</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>5. repository.New</strong>เตรียม GORM</div>
+        </div>
+        <div class="code-toolbar">
+          <pre><code>func (a *App) startup(ctx context.Context) {
+  a.ctx = ctx
+
+  db, path, err := database.OpenDefault()
+  if err != nil {
+    a.dbErr = err
+    return
+  }
+
+  a.database = db
+  a.repo = repository.New(db.GORM())
+  a.dbPath = path
+}</code></pre>
+        </div>
+        <div class="callout success">
+          <strong>จุดสำคัญ:</strong>
+          ถ้า <code>OpenDefault()</code> สำเร็จ ตัวแปร <code>a.repo</code> จะพร้อมให้ API อื่นใช้
+        </div>
+      </section>
+
+      <section class="section" id="sqlite-path">
+        <h2>4. ตำแหน่งไฟล์ SQLite</h2>
+        <p>
+          ไฟล์หลักคือ <code>internal/database/database.go</code>
+          และฟังก์ชันที่กำหนดตำแหน่งคือ <code>DefaultPath()</code>
+        </p>
+        <div class="code-toolbar">
+          <pre><code>func DefaultPath() (string, error) {
+  baseDir, err := os.UserConfigDir()
+  if err != nil {
+    return "", err
+  }
+
+  return filepath.Join(
+    baseDir,
+    appDirectoryName,
+    "photo-backup.db",
+  ), nil
+}</code></pre>
+        </div>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>ทำไมไม่เขียน Path ตายตัว</h3>
+            <p>
+              ถ้าเขียน <code>C:\\Users\\ชื่อคน\\...</code> โปรแกรมจะใช้กับเครื่องอื่นไม่ได้
+              และถ้าเขียน <code>/Users/name/...</code> ก็จะไม่เหมาะกับ Windows
+            </p>
+          </article>
+          <article class="card">
+            <h3>ทำไมใช้ filepath.Join</h3>
+            <p>
+              Go จะเลือกตัวคั่น Path ที่เหมาะกับ OS โดยอัตโนมัติ
+              เช่น <code>\\</code> บน Windows และ <code>/</code> บน macOS
+            </p>
+          </article>
+        </div>
+        <div class="callout">
+          <strong>จำง่าย:</strong>
+          <code>os.UserConfigDir()</code> เลือกฐาน Path, <code>PhotoBackup</code> คือโฟลเดอร์ของ App,
+          และ <code>photo-backup.db</code> คือไฟล์ Database จริง
+        </div>
+      </section>
+
+      <section class="section" id="connection">
+        <h2>5. เปิด SQLite Connection</h2>
+        <p>
+          ฟังก์ชัน <code>OpenAt(path)</code> ทำงานตามลำดับ: ตรวจ Path → สร้างโฟลเดอร์ → เปิด GORM → Migrate
+        </p>
+        <div class="code-toolbar">
+          <pre><code>func OpenAt(path string) (*Database, error) {
+  if path == "" {
+    return nil, errors.New("database path is empty")
+  }
+
+  directory := filepath.Dir(path)
+  if err := os.MkdirAll(directory, 0755); err != nil {
+    return nil, err
+  }
+
+  conn, err := gorm.Open(sqlite.Open(path), &amp;gorm.Config{})
+  if err != nil {
+    return nil, err
+  }
+
+  return &amp;Database{conn: conn}, nil
+}</code></pre>
+        </div>
+        <h3>ตัวแปรแต่ละตัวคืออะไร</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>ตัวแปร</th><th>ประเภท</th><th>ความหมาย</th></tr>
+            <tr><td><code>path</code></td><td>string</td><td>ตำแหน่งไฟล์ SQLite</td></tr>
+            <tr><td><code>directory</code></td><td>string</td><td>โฟลเดอร์ที่เก็บไฟล์ Database</td></tr>
+            <tr><td><code>conn</code></td><td>*gorm.DB</td><td>ตัวเชื่อมต่อที่ GORM ใช้ Query</td></tr>
+            <tr><td><code>Database.conn</code></td><td>*gorm.DB</td><td>เก็บ connection ไว้ภายใน struct</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="migration">
+        <h2>6. AutoMigrate ทำอะไร</h2>
+        <p>
+          <code>AutoMigrate</code> อ่านโครงสร้างจาก Model แล้วตรวจว่าตาราง/คอลัมน์ที่จำเป็นมีหรือยัง
+          ถ้ายังไม่มีจะสร้างให้โดยไม่ต้องเขียน CREATE TABLE เองในโค้ด
+        </p>
+        <div class="code-toolbar">
+          <pre><code>if err := conn.AutoMigrate(
+  &amp;models.Photo{},
+  &amp;models.Tag{},
+); err != nil {
+  return nil, err
+}</code></pre>
+        </div>
+        <div class="grid grid-3">
+          <article class="card">
+            <h3>ครั้งแรก</h3>
+            <p>สร้างตาราง <code>photos</code>, <code>tags</code> และ schema ของความสัมพันธ์</p>
+          </article>
+          <article class="card">
+            <h3>ครั้งถัดไป</h3>
+            <p>ตรวจตารางเดิมและพยายามปรับให้ตรงกับ Model โดยไม่ลบข้อมูลเดิม</p>
+          </article>
+          <article class="card">
+            <h3>เมื่อเพิ่ม Field</h3>
+            <p>ต้องตรวจว่า Migration ทำงาน และต้องปรับ Repository ให้ใช้ Field ใหม่ถูกต้อง</p>
+          </article>
+        </div>
+        <div class="callout warning">
+          <strong>ข้อควรระวัง:</strong>
+          AutoMigrate ไม่ได้แปลว่าการเปลี่ยน Schema ทุกแบบปลอดภัยเสมอ ควร Backup Database ก่อนการเปลี่ยน Model ใหญ่ ๆ
+        </div>
+      </section>
+
+      <section class="section" id="models">
+        <h2>7. Model Photo</h2>
+        <p>
+          อยู่ที่ <code>internal/models/photo.go</code> และแทนข้อมูลรูปภาพหนึ่งรายการในระบบ
+        </p>
+        <div class="code-toolbar">
+          <pre><code>type Photo struct {
+  ID           uint      `gorm:"primaryKey"`
+  OriginalName string    `gorm:"not null"`
+  OriginalPath string    `gorm:"not null"`
+  BackupPath   string    `gorm:"not null;uniqueIndex"`
+  FileSize     int64     `gorm:"not null;default:0"`
+  BackedUpAt   time.Time `gorm:"not null"`
+  CreatedAt    time.Time
+  UpdatedAt    time.Time
+  Tags         []Tag `gorm:"many2many:photo_tags;"`
+}</code></pre>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <tr><th>Field</th><th>ความหมาย</th><th>ใช้ที่ไหน</th></tr>
+            <tr><td><code>ID</code></td><td>รหัสรูปที่ไม่ซ้ำ</td><td>ใช้เลือกหลายรูป, Tag และ Search</td></tr>
+            <tr><td><code>OriginalName</code></td><td>ชื่อไฟล์เดิม</td><td>แสดงบน Dashboard และผล Backup</td></tr>
+            <tr><td><code>OriginalPath</code></td><td>ตำแหน่ง Flash Drive</td><td>เก็บแหล่งที่มาของรูป</td></tr>
+            <tr><td><code>BackupPath</code></td><td>ตำแหน่งไฟล์ที่คัดลอกแล้ว</td><td>ใช้เปิด/แสดงไฟล์ และกัน Path ซ้ำ</td></tr>
+            <tr><td><code>FileSize</code></td><td>จำนวน byte</td><td>แสดงรายละเอียดและตรวจผล Copy</td></tr>
+            <tr><td><code>BackedUpAt</code></td><td>เวลาที่สำรอง</td><td>เรียงรูปล่าสุด</td></tr>
+            <tr><td><code>CreatedAt</code></td><td>เวลาสร้าง row</td><td>GORM จัดการอัตโนมัติ</td></tr>
+            <tr><td><code>UpdatedAt</code></td><td>เวลาแก้ row</td><td>GORM จัดการอัตโนมัติ</td></tr>
+            <tr><td><code>Tags</code></td><td>Tag ที่ผูกกับรูป</td><td>Preload, Tag page และ Search</td></tr>
+          </table>
+        </div>
+        <div class="callout">
+          <strong>uniqueIndex ที่ BackupPath:</strong>
+          ช่วยไม่ให้มี Photo สอง row ใช้ตำแหน่ง Backup เดียวกัน แต่การกันชื่อไฟล์ซ้ำตอน Copy
+          ยังต้องทำใน <code>internal/backup</code> ด้วย
+        </div>
+      </section>
+
+      <section class="section" id="tag-model">
+        <h2>8. Model Tag</h2>
+        <p>
+          อยู่ที่ <code>internal/models/tag.go</code> เป็นชุดคำที่ใช้จัดกลุ่มรูปภาพ
+        </p>
+        <div class="code-toolbar">
+          <pre><code>type Tag struct {
+  ID        uint   `gorm:"primaryKey"`
+  Name      string `gorm:"not null;uniqueIndex"`
+  CreatedAt time.Time
+  UpdatedAt time.Time
+  Photos    []Photo `gorm:"many2many:photo_tags;"`
+}</code></pre>
+        </div>
+        <p>
+          <code>Name</code> มี <code>uniqueIndex</code> เพื่อป้องกัน Tag ชื่อเดียวกันเกิดหลาย row
+          ส่วน <code>Photos</code> เป็นฝั่งกลับของความสัมพันธ์กับ Photo
+        </p>
+      </section>
+
+      <section class="section" id="relations">
+        <h2>9. ความสัมพันธ์ Photo, Tag และ PhotoTag</h2>
+        <p class="lead">ระบบใช้ Many-to-Many เพราะรูปและ Tag ต่างฝ่ายต่างมีได้หลายรายการ</p>
+        <div class="diagram">
+          <div class="diagram-line">
+            <span class="diagram-node hot">photos</span>
+            1 ───── หลาย
+            <span class="diagram-node">photo_tags</span>
+            หลาย ───── 1
+            <span class="diagram-node hot">tags</span>
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>ตัวอย่างข้อมูล</h3>
+            <p>Photo 10 คือรูปทะเล อาจมี Tag 1 = ทะเล และ Tag 2 = ทริป</p>
+            <p>Tag 1 = ทะเล อาจถูกใช้กับ Photo 10, Photo 11 และ Photo 20</p>
+          </article>
+          <article class="card">
+            <h3>ทำไมไม่เก็บเป็น string</h3>
+            <p>ถ้าเก็บ <code>"ทะเล,ทริป"</code> ใน Photo จะค้นหา, นับจำนวน และกันชื่อซ้ำยาก</p>
+            <p>ตารางกลางทำให้ Query เป็นระบบและใช้ GORM Association ได้</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="repository">
+        <h2>10. Repository ทำหน้าที่อะไร</h2>
+        <p>
+          <code>Repository</code> คือชั้น Data Access เป็นผู้รู้ว่าตารางชื่ออะไร ใช้ GORM แบบใด และต้อง JOIN อย่างไร
+        </p>
+        <div class="code-toolbar">
+          <pre><code>type Repository struct {
+  db *gorm.DB
+}
+
+func New(db *gorm.DB) *Repository {
+  return &amp;Repository{db: db}
+}</code></pre>
+        </div>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>การสร้าง Photo</h3>
+            <p><code>CreatePhoto(photo)</code> เรียก <code>r.db.Create(photo)</code> ซึ่งทำ INSERT</p>
+            <p class="muted">ถ้า unique constraint ชน จะคืน Error กลับไป</p>
+          </article>
+          <article class="card">
+            <h3>การอ่าน Photo</h3>
+            <p><code>ListPhotos()</code> ใช้ <code>Preload("Tags")</code> และเรียงวันที่ล่าสุดก่อน</p>
+            <p class="muted">ผลลัพธ์เป็น <code>[]models.Photo</code></p>
+          </article>
+          <article class="card">
+            <h3>การนับ Photo</h3>
+            <p><code>CountPhotos()</code> เรียก <code>Model(&amp;models.Photo{}).Count</code></p>
+            <p class="muted">เหมาะกับ Dashboard ที่ต้องการตัวเลขอย่างเดียว</p>
+          </article>
+          <article class="card">
+            <h3>การนับ Tag</h3>
+            <p><code>CountTags()</code> นับจำนวน row ในตาราง tags</p>
+            <p class="muted">ยังไม่ใช่จำนวนการผูก Tag กับรูป</p>
+          </article>
+        </div>
+        <h3>ตัวอย่าง CountPhotos</h3>
+        <div class="code-toolbar">
+          <pre><code>func (r *Repository) CountPhotos() (int64, error) {
+  var count int64
+
+  err := r.db.
+    Model(&amp;models.Photo{}).
+    Count(&amp;count).
+    Error
+
+  return count, err
+}</code></pre>
+        </div>
+        <p>
+          GORM จะสร้าง Query แนวคิดประมาณ <code>SELECT COUNT(*) FROM photos</code>
+          แล้วนำค่ากลับมาใส่ในตัวแปร <code>count</code>
+        </p>
+      </section>
+
+      <section class="section" id="repository-read">
+        <h2>11. อ่านข้อมูล Photo และ Preload Tags</h2>
+        <div class="code-toolbar">
+          <pre><code>func (r *Repository) ListPhotos() ([]models.Photo, error) {
+  var photos []models.Photo
+
+  err := r.db.
+    Preload("Tags").
+    Order("backed_up_at DESC").
+    Find(&amp;photos).
+    Error
+
+  return photos, err
+}</code></pre>
+        </div>
+        <h3>แต่ละคำสั่งทำอะไร</h3>
+        <div class="table-wrap">
+          <table>
+            <tr><th>คำสั่ง</th><th>หน้าที่</th></tr>
+            <tr><td><code>Preload("Tags")</code></td><td>โหลด Tag ที่สัมพันธ์กับ Photo เพิ่ม</td></tr>
+            <tr><td><code>Order("backed_up_at DESC")</code></td><td>รูปที่ Backup ล่าสุดขึ้นก่อน</td></tr>
+            <tr><td><code>Find(&amp;photos)</code></td><td>อ่านผลเป็น slice ของ Photo</td></tr>
+            <tr><td><code>.Error</code></td><td>อ่าน Error จาก Query</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="repository-tag">
+        <h2>12. เพิ่ม Tag ให้หลาย Photo</h2>
+        <p>
+          ฟังก์ชัน <code>AddTagToPhotos</code> เป็นตัวอย่าง Business operation ที่ต้องทำหลายขั้นตอนใน Transaction
+        </p>
+        <ol>
+          <li>Trim ช่องว่างหน้าหลังชื่อ Tag</li>
+          <li>ปฏิเสธชื่อว่างด้วย <code>ErrEmptyTagName</code></li>
+          <li>ปฏิเสธกรณีไม่ได้เลือก Photo ด้วย <code>ErrNoPhotoIDs</code></li>
+          <li>ตัด ID ซ้ำด้วย map</li>
+          <li>เปิด Transaction</li>
+          <li>ใช้ <code>FirstOrCreate</code> ป้องกัน Tag ซ้ำ</li>
+          <li>โหลด Photo ตาม ID</li>
+          <li>ตรวจว่าจำนวน Photo ที่พบครบกับที่เลือก</li>
+          <li>ใช้ <code>Association("Photos").Append</code></li>
+        </ol>
+        <div class="callout success">
+          <strong>เหตุผลของ Transaction:</strong>
+          ถ้าสร้าง Tag สำเร็จแต่ Photo ID ไม่ครบ ระบบจะ Rollback ให้ ไม่เหลือข้อมูลครึ่ง ๆ กลาง ๆ
+        </div>
+      </section>
+
+      <section class="section" id="wails">
+        <h2>13. Wails Binding ทำงานอย่างไร</h2>
+        <p>
+          Wails ทำให้ public method บน Go object ถูกเรียกจาก JavaScript ใน WebView ได้
+        </p>
+        <div class="flow">
+          <div class="flow-step"><strong>Go method</strong><code>GetPhotoCount()</code></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>main.go</strong><code>Bind: []interface{}{app}</code></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>Generate</strong><code>wails generate module</code></div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>Nuxt</strong><code>await GetPhotoCount()</code></div>
+        </div>
+        <div class="code-toolbar">
+          <pre><code>// app.go
+func (a *App) GetPhotoCount() int64 {
+  if a.repo == nil {
+    return 0
+  }
+
+  count, err := a.repo.CountPhotos()
+  if err != nil {
+    return 0
+  }
+
+  return count
+}
+
+// Vue page
+import { GetPhotoCount } from "../../wailsjs/go/main/App";
+const count = await GetPhotoCount();</code></pre>
+        </div>
+        <div class="callout warning">
+          <strong>Generated files:</strong>
+          <code>frontend/wailsjs/</code> เกิดจาก Wails ไม่ควรแก้มือ ถ้า API เปลี่ยนให้ Generate ใหม่
+        </div>
+      </section>
+
+      <section class="section" id="dashboard">
+        <h2>14. Dashboard อ่าน Database อย่างไร</h2>
+        <p>
+          หน้า <code>frontend/app/pages/index.vue</code> โหลดข้อมูลเมื่อ component mount
+          โดยเรียก API หลายตัวพร้อมกัน
+        </p>
+        <div class="code-toolbar">
+          <pre><code>const [status, path, photosCount, tagsCount, photos, tagList] =
+  await Promise.all([
+    GetDatabaseStatus(),
+    GetDatabasePath(),
+    GetPhotoCount(),
+    GetTagCount(),
+    GetRecentPhotos(6),
+    GetTags(),
+  ])</code></pre>
+        </div>
+        <div class="grid grid-3">
+          <article class="card"><h3>Database status</h3><p><code>GetDatabaseStatus</code> เช็คว่า <code>database</code> และ <code>repo</code> พร้อมหรือไม่</p></article>
+          <article class="card"><h3>Photo count</h3><p><code>GetPhotoCount</code> เรียก Repository นับ row ใน photos</p></article>
+          <article class="card"><h3>Recent photos</h3><p><code>GetRecentPhotos(6)</code> โหลดรูป 6 รายการล่าสุด</p></article>
+        </div>
+        <p class="muted">
+          ถ้า Promise ใด Error หน้าเว็บจะเข้า <code>catch</code> และแสดงข้อความว่าไม่สามารถโหลดข้อมูลจาก Database ได้
+        </p>
+      </section>
+
+      <section class="section" id="backup">
+        <h2>15. Backup flow ตั้งแต่เลือก Folder ถึง SQLite</h2>
+        <div class="flow">
+          <div class="flow-step"><strong>1</strong>เลือกต้นทาง</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>2</strong>เลือกปลายทาง</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>3</strong>Discover images</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>4</strong>Copy files</div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-step"><strong>5</strong>Create Photo row</div>
+        </div>
+        <ol>
+          <li>หน้า Backup เรียก <code>SelectSourceFolder()</code> เพื่อเปิด Native Folder Dialog</li>
+          <li>หน้า Backup เรียก <code>SelectDestFolder()</code> เพื่อเลือกปลายทาง</li>
+          <li>เมื่อกดเริ่ม เรียก <code>StartBackup(sourcePath, destPath)</code></li>
+          <li>Go เรียก <code>backup.DiscoverImages</code> ค้นหาแบบ recursive</li>
+          <li>กรองเฉพาะ <code>.jpg</code>, <code>.jpeg</code>, <code>.png</code></li>
+          <li>เรียก <code>backup.CopyFiles</code> และส่ง Event progress ให้ Frontend</li>
+          <li>วนผลลัพธ์ที่สำเร็จ แล้วสร้าง <code>models.Photo</code></li>
+          <li>เรียก <code>a.repo.CreatePhoto(photo)</code> เพื่อบันทึก SQLite</li>
+        </ol>
+        <div class="code-toolbar">
+          <pre><code>photo := &amp;models.Photo{
+  OriginalName: result.OriginalName,
+  OriginalPath: result.OriginalPath,
+  BackupPath:   result.BackupPath,
+  FileSize:     result.FileSize,
+  BackedUpAt:   time.Now(),
+}
+
+if dbErr := a.repo.CreatePhoto(photo); dbErr != nil {
+  fmt.Printf("Warning: save photo to db failed: %s", dbErr.Error())
+}</code></pre>
+        </div>
+        <div class="callout warning">
+          <strong>สำคัญ:</strong>
+          การ Copy file สำเร็จไม่ได้แปลว่า INSERT Database สำเร็จเสมอ โค้ดจึงตรวจผลแยกกัน
+        </div>
+      </section>
+
+      <section class="section" id="tags">
+        <h2>16. Tag flow ตั้งแต่เลือกหลายรูป</h2>
+        <ol>
+          <li><code>GetTaggedPhotos()</code> โหลด Photo พร้อม Tags ด้วย Preload</li>
+          <li>ผู้ใช้เลือกหลายรูป เก็บ ID ใน <code>selectedIDs</code></li>
+          <li>ผู้ใช้พิมพ์ชื่อ Tag</li>
+          <li>Vue เรียก <code>AddTagToPhotos(photoIDs, name)</code></li>
+          <li>Repository Trim ชื่อและตรวจว่า Photo ID ไม่ว่าง</li>
+          <li>Transaction ทำ FirstOrCreate Tag</li>
+          <li>Association Append ความสัมพันธ์ลง photo_tags</li>
+          <li>Frontend โหลดข้อมูลใหม่เพื่อให้ Badge และ Cloud อัปเดต</li>
+        </ol>
+        <div class="code-toolbar">
+          <pre><code>return tx.Model(&amp;tag).
+  Association("Photos").
+  Append(&amp;photos)</code></pre>
+        </div>
+        <p>
+          คำสั่งนี้ไม่ได้เอา Tag ไปเก็บเป็นข้อความใน Photo แต่บันทึกความสัมพันธ์ในตารางกลาง
+        </p>
+      </section>
+
+      <section class="section" id="tag-cloud">
+        <h2>17. Tag Cloud คำนวณอย่างไร</h2>
+        <p>
+          Tag Cloud ต้องรู้ว่าแต่ละ Tag ถูกใช้กับกี่รูป จึงใช้ LEFT JOIN จาก tags ไป photo_tags
+        </p>
+        <div class="code-toolbar">
+          <pre><code>err := r.db.Model(&amp;models.Tag{}).
+  Select("tags.id, tags.name, COUNT(DISTINCT photo_tags.photo_id) AS photo_count").
+  Joins("LEFT JOIN photo_tags ON photo_tags.tag_id = tags.id").
+  Group("tags.id, tags.name").
+  Order("photo_count DESC").
+  Order("tags.name ASC").
+  Scan(&amp;result).Error</code></pre>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <tr><th>ส่วน</th><th>หน้าที่</th></tr>
+            <tr><td><code>LEFT JOIN</code></td><td>ให้ Tag ที่ยังไม่มีรูปก็ยังปรากฏได้</td></tr>
+            <tr><td><code>COUNT(DISTINCT ...)</code></td><td>นับรูปไม่ให้ซ้ำ</td></tr>
+            <tr><td><code>GROUP BY</code></td><td>รวมผลตาม Tag แต่ละตัว</td></tr>
+            <tr><td><code>ORDER BY photo_count DESC</code></td><td>Tag ที่ใช้มากขึ้นก่อน</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="search">
+        <h2>18. Search flow และ AND / OR</h2>
+        <p>
+          หน้า Search ส่ง <code>tagNames</code> และ <code>mode</code> ให้ <code>SearchPhotos</code>
+          ซึ่งส่งต่อไป <code>SearchPhotosByTags</code>
+        </p>
+        <div class="grid grid-2">
+          <article class="card">
+            <span class="status ok">OR</span>
+            <h3>ตรงอย่างน้อยหนึ่ง Tag</h3>
+            <p>
+              ถ้าเลือก ทะเล และ ภูเขา รูปที่มีอย่างใดอย่างหนึ่งก็แสดง
+            </p>
+            <p class="muted">ใช้ subquery, JOIN และ Distinct</p>
+          </article>
+          <article class="card">
+            <span class="status warn">AND</span>
+            <h3>ต้องตรงครบทุก Tag</h3>
+            <p>
+              ถ้าเลือก ทะเล และ ภูเขา รูปต้องมีทั้งสอง Tag จึงจะแสดง
+            </p>
+            <p class="muted">ใช้ Group และ Having Count</p>
+          </article>
+        </div>
+        <div class="code-toolbar">
+          <pre><code>lowerTags := []string{"ทะเล", "ภูเขา"}
+
+Where("LOWER(tags.name) IN ?", lowerTags)
+
+Having(
+  "COUNT(DISTINCT LOWER(tags.name)) = ?",
+  len(lowerTags),
+)</code></pre>
+        </div>
+        <div class="callout success">
+          <strong>ป้องกัน SQL Injection:</strong>
+          ใช้ Parameterized Query ผ่าน GORM ไม่เอาข้อความจากผู้ใช้ไปต่อเป็น SQL string โดยตรง
+        </div>
+      </section>
+
+      <section class="section" id="errors">
+        <h2>19. Error handling</h2>
+        <p>
+          ระบบมีหลายจุดที่อาจผิดพลาด จึงต้องแยกประเภท Error และไม่กลืน Error โดยไม่จำเป็น
+        </p>
+        <div class="table-wrap">
+          <table>
+            <tr><th>จุดเกิด Error</th><th>ตัวอย่าง</th><th>ผลที่ระบบควรทำ</th></tr>
+            <tr><td>เปิด Database</td><td>สร้าง directory ไม่ได้ / SQLite เปิดไม่ได้</td><td>เก็บไว้ใน <code>dbErr</code> และแสดง Disconnected</td></tr>
+            <tr><td>เลือก Folder</td><td>ผู้ใช้กด Cancel</td><td>ไม่เปลี่ยน Path เดิม และไม่ถือเป็น Fatal Error</td></tr>
+            <tr><td>ค้นหาไฟล์</td><td>Source ไม่มีอยู่จริง</td><td>คืน Error จาก <code>DiscoverImages</code></td></tr>
+            <tr><td>Copy file</td><td>ไม่มีสิทธิ์เขียน / ชื่อซ้ำ</td><td>บันทึกผลล้มเหลวแยกรายการและส่ง Progress ต่อ</td></tr>
+            <tr><td>สร้าง Tag</td><td>ชื่อว่าง / ไม่ได้เลือก Photo</td><td>คืน <code>ErrEmptyTagName</code> หรือ <code>ErrNoPhotoIDs</code></td></tr>
+            <tr><td>Search</td><td>Database ไม่พร้อม</td><td>Frontend แสดง Error State และให้ลองใหม่</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="testing">
+        <h2>20. Testing และคำสั่งตรวจงาน</h2>
+        <div class="grid grid-2">
+          <article class="card">
+            <h3>Go test</h3>
+            <p>ตรวจ Package ทั้งหมด รวม Database, Repository และ Backup</p>
+            <div class="code"><code>go test ./...</code></div>
+          </article>
+          <article class="card">
+            <h3>Nuxt build</h3>
+            <p>ตรวจ TypeScript, Vue template และการ Build Frontend</p>
+            <div class="code"><code>cd frontend<br>npm run build</code></div>
+          </article>
+          <article class="card">
+            <h3>Wails dev</h3>
+            <p>ต้องรันจากโฟลเดอร์ที่มี <code>wails.json</code>, <code>main.go</code> และ <code>go.mod</code></p>
+            <div class="code"><code>cd photo-backup<br>wails dev</code></div>
+          </article>
+          <article class="card">
+            <h3>Wails binding</h3>
+            <p>เมื่อเพิ่ม public API ใน Go ให้สร้าง binding ใหม่</p>
+            <div class="code"><code>wails generate module</code></div>
+          </article>
+        </div>
+        <div class="callout">
+          <strong>ลำดับที่แนะนำ:</strong>
+          แก้ Go → gofmt → go test → generate binding → แก้ Vue → npm build → wails dev
+        </div>
+      </section>
+
+      <section class="section" id="git">
+        <h2>21. ไฟล์ไหนควร Commit</h2>
+        <div class="table-wrap">
+          <table>
+            <tr><th>ไฟล์</th><th>โดยทั่วไป</th><th>เหตุผล</th></tr>
+            <tr><td><code>app.go</code></td><td><span class="status ok">Commit เมื่อแก้ API</span></td><td>เป็นโค้ด Backend จริง</td></tr>
+            <tr><td><code>internal/database/</code></td><td><span class="status ok">Commit</span></td><td>เป็นโค้ดเปิด Database</td></tr>
+            <tr><td><code>internal/models/</code></td><td><span class="status ok">Commit</span></td><td>เป็น schema ของระบบ</td></tr>
+            <tr><td><code>internal/repository/</code></td><td><span class="status ok">Commit</span></td><td>เป็น Data access logic</td></tr>
+            <tr><td><code>frontend/app/pages/</code></td><td><span class="status ok">Commit</span></td><td>เป็นหน้า Feature</td></tr>
+            <tr><td><code>frontend/wailsjs/</code></td><td><span class="status warn">ตรวจ Diff ก่อน</span></td><td>Commit เมื่อเกิดจาก API ใหม่ที่ต้องใช้จริง</td></tr>
+            <tr><td><code>package.json.md5</code></td><td><span class="status warn">มักไม่ต้อง</span></td><td>เป็นไฟล์ Generated จากเครื่องมือ</td></tr>
+            <tr><td><code>node_modules/</code></td><td><span class="status warn">ไม่ Commit</span></td><td>Dependency ติดตั้งใหม่จาก package-lock</td></tr>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="checklist">
+        <h2>22. Checklist ก่อน Demo</h2>
+        <ul class="checklist">
+          <li>เปิดโปรแกรมแล้ว Database แสดง Connected</li>
+          <li>ปิดเปิดโปรแกรมใหม่แล้วข้อมูลเดิมยังอยู่</li>
+          <li>Dashboard แสดงจำนวน Photo และ Tag จาก Database จริง</li>
+          <li>เลือกต้นทางและปลายทางได้บน Windows</li>
+          <li>ค้นหาไฟล์ในโฟลเดอร์ย่อยได้</li>
+          <li>กรองเฉพาะ jpg, jpeg และ png</li>
+          <li>Backup สำเร็จแล้วมี row ใน photos</li>
+          <li>เพิ่ม Tag ให้หลายรูปแล้วมี row ใน photo_tags</li>
+          <li>Tag Cloud นับจำนวนรูปถูกต้อง</li>
+          <li>Search แบบ OR และ AND ได้ผลต่างกันถูกต้อง</li>
+          <li>กด Cancel Dialog แล้วไม่ทำให้ Path พัง</li>
+          <li>ไม่มีไฟล์ Generated หรือ node_modules ถูก Commit โดยไม่ตั้งใจ</li>
+          <li>รัน <code>go test ./...</code> ผ่าน</li>
+          <li>รัน <code>npm run build</code> ผ่าน</li>
+          <li>ทุกคนในทีมรู้ว่า API ใดอยู่ใน app.go</li>
+        </ul>
+      </section>
+
+      <section class="section" id="summary">
+        <h2>23. สรุปสุดท้าย</h2>
+        <div class="callout success">
+          <strong>Database ของ PhotoBackup:</strong>
+          คือไฟล์ SQLite ที่ถูกเปิดโดย <code>internal/database/database.go</code>
+          แล้วส่ง <code>*gorm.DB</code> ไปให้ <code>internal/repository/repository.go</code>
+          ส่วน <code>app.go</code> เป็นสะพานจาก Wails ไป Repository และ Nuxt เป็นหน้าจอที่เรียกสะพานนี้
+        </div>
+        <p>
+          ถ้าจะเพิ่ม Feature ใหม่ ให้คิดตามลำดับนี้เสมอ:
+          Model ต้องเก็บอะไร → Repository ต้อง Query อะไร → app.go ต้องเปิด API อะไร →
+          Wails ต้อง Generate binding อะไร → Vue ต้องแสดงผลและจัดการ Error อย่างไร
+        </p>
+      </section>
+
+      <footer class="footer">
+        เอกสารนี้สร้างจากโครงสร้างและ Source Code ในโฟลเดอร์ photo-backup ของโปรเจกต์ PhotoBackup
+        เปิดด้วย Browser ได้โดยตรง และใช้ปุ่มค้นหา/โหมดมืด/พิมพ์ PDF ได้
+      </footer>
+    </main>
+  </div>
+  <script src="DATABASE_GUIDE.js"></script>
+</body>
+</html>
