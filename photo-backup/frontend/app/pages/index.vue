@@ -39,7 +39,13 @@
 
         <div v-else class="photo-list">
           <div v-for="photo in recentPhotos" :key="photo.id" class="photo-item">
-            <div class="photo-icon">📷</div>
+            <img
+              v-if="photo.thumbnail"
+              :src="photo.thumbnail"
+              class="photo-thumb"
+              :alt="photo.originalName"
+            />
+            <div v-else class="photo-icon">📷</div>
 
             <div>
               <strong>{{ photo.originalName }}</strong>
@@ -214,6 +220,14 @@ onMounted(async () => {
   font-size: 24px;
   height: 48px;
   justify-content: center;
+  width: 48px;
+}
+
+.photo-thumb {
+  border-radius: 8px;
+  flex-shrink: 0;
+  height: 48px;
+  object-fit: cover;
   width: 48px;
 }
 

@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -136,6 +138,25 @@ type PhotoSummary struct {
 	OriginalName string `json:"originalName"`
 	BackupPath   string `json:"backupPath"`
 	BackedUpAt   string `json:"backedUpAt"`
+	Thumbnail    string `json:"thumbnail"`
+}
+
+// readImageAsBase64 อ่านไฟล์รูปภาพจาก backupPath แล้วแปลงเป็น Data URL (Base64) เพื่อส่งให้หน้าเว็บแสดงภาพจริง
+func (a *App) readImageAsBase64(filePath string) string {
+	if filePath == "" {
+		return ""
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return ""
+	}
+	mimeType := http.DetectContentType(data)
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(data))
+}
+
+// GetImageBase64 ให้ Frontend เรียกแปลงรูปเดี่ยวๆ ได้
+func (a *App) GetImageBase64(filePath string) string {
+	return a.readImageAsBase64(filePath)
 }
 
 func (a *App) GetRecentPhotos(limit int) []PhotoSummary {
@@ -156,6 +177,7 @@ func (a *App) GetRecentPhotos(limit int) []PhotoSummary {
 			OriginalName: photo.OriginalName,
 			BackupPath:   photo.BackupPath,
 			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
+			Thumbnail:    a.readImageAsBase64(photo.BackupPath),
 		})
 	}
 
@@ -235,6 +257,7 @@ type TaggedPhotoSummary struct {
 	OriginalName string       `json:"originalName"`
 	BackupPath   string       `json:"backupPath"`
 	BackedUpAt   string       `json:"backedUpAt"`
+	Thumbnail    string       `json:"thumbnail"`
 	Tags         []TagSummary `json:"tags"`
 }
 
@@ -261,6 +284,7 @@ func (a *App) GetTaggedPhotos() ([]TaggedPhotoSummary, error) {
 			OriginalName: photo.OriginalName,
 			BackupPath:   photo.BackupPath,
 			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
+			Thumbnail:    a.readImageAsBase64(photo.BackupPath),
 			Tags:         tags,
 		})
 	}
@@ -332,6 +356,7 @@ func (a *App) SearchPhotos(tagNames []string, mode string) ([]TaggedPhotoSummary
 			OriginalName: photo.OriginalName,
 			BackupPath:   photo.BackupPath,
 			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
+			Thumbnail:    a.readImageAsBase64(photo.BackupPath),
 			Tags:         tags,
 		})
 	}

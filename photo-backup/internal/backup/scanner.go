@@ -130,8 +130,8 @@ func CopyFiles(images []ImageFile, destDir string, onProgress ProgressCallback) 
 		}
 		// หาชื่อไฟล์ที่ไม่ซ้ำ
 		destPath := uniqueDestPath(destDir, img.Name)
-		// คัดลอกไฟล์
-		if err := copyFile(img.Path, destPath); err != nil {
+		// ย้ายไฟล์จากต้นทางไปปลายทาง
+		if err := moveFile(img.Path, destPath); err != nil {
 			result.Success = false
 			result.Error = err.Error()
 			summary.Failed++
@@ -165,20 +165,40 @@ func uniqueDestPath(destDir string, fileName string) string {
 		}
 	}
 }
-// copyFile คัดลอกไฟล์จาก src ไปยัง dst
-func copyFile(src string, dst string) error {
+
+// moveFile ย้ายไฟล์จาก src ไปยัง dst (รองรับทั้งไดรฟ์เดียวกัน และข้ามไดรฟ์ เช่น Flash Drive ไป C:)
+func moveFile(src string, dst string) error {
+	// 1. ลอง os.Rename ก่อน (เร็วมากถ้าอยู่ในไดรฟ์เดียวกัน)
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+
+	// 2. ถ้าข้ามไดรฟ์ (เช่น D: ไป C:) ให้ Copy ไปปลายทางก่อน
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("เปิดไฟล์ต้นทางไม่ได้: %w", err)
 	}
-	defer sourceFile.Close()
+
 	destFile, err := os.Create(dst)
 	if err != nil {
+		sourceFile.Close()
 		return fmt.Errorf("สร้างไฟล์ปลายทางไม่ได้: %w", err)
 	}
-	defer destFile.Close()
-	if _, err := io.Copy(destFile, sourceFile); err != nil {
-		return fmt.Errorf("คัดลอกข้อมูลไม่สำเร็จ: %w", err)
+
+	_, copyErr := io.Copy(destFile, sourceFile)
+	// ต้องปิด handle ทั้ง 2 ไฟล์ทันที เพื่อไม่ให้ Windows ล็อคไฟล์ตอนลบ
+	sourceFile.Close()
+	destFile.Close()
+
+	if copyErr != nil {
+		_ = os.Remove(dst) // ลบไฟล์ปลายทางที่เขียนไม่เสร็จทิ้ง
+		return fmt.Errorf("คัดลอกข้อมูลไม่สำเร็จ: %w", copyErr)
 	}
+
+	// 3. ลบไฟล์ต้นทางออก เพื่อให้เป็นการ "ย้าย" จริงๆ
+	if err := os.Remove(src); err != nil {
+		return fmt.Errorf("ย้ายไฟล์สำเร็จแต่ลบไฟล์ต้นทางไม่ได้: %w", err)
+	}
+
 	return nil
 }

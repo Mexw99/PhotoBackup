@@ -39,3 +39,33 @@ func TestDiscoverImagesRejectsMissingDirectory(t *testing.T) {
 		t.Fatalf("expected ErrSourceDirectoryNotFound, got %v", err)
 	}
 }
+
+func TestCopyFilesMovesAndRemovesSource(t *testing.T) {
+	srcDir := t.TempDir()
+	destDir := t.TempDir()
+
+	testFile := filepath.Join(srcDir, "pic.jpg")
+	if err := os.WriteFile(testFile, []byte("image-data"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	images := []ImageFile{
+		{Name: "pic.jpg", Path: testFile, Size: 10},
+	}
+
+	summary := CopyFiles(images, destDir, nil)
+	if summary.Success != 1 {
+		t.Fatalf("expected 1 success, got %d (failed: %d)", summary.Success, summary.Failed)
+	}
+
+	// 1. ตรวจสอบว่าไฟล์ปลายทางมีอยู่จริง
+	expectedDest := filepath.Join(destDir, "pic.jpg")
+	if _, err := os.Stat(expectedDest); err != nil {
+		t.Fatalf("dest file not found: %v", err)
+	}
+
+	// 2. ตรวจสอบว่าไฟล์ต้นทางถูกลบออกแล้ว (ย้ายสำเร็จ)
+	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
+		t.Fatalf("source file should have been deleted, but still exists")
+	}
+}

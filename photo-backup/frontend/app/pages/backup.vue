@@ -242,6 +242,7 @@ async function startBackup() {
     const result = await StartBackup(sourcePath.value, destPath.value);
     backupSummary.value = result;
     backupDone.value = true;
+    imageFiles.value = await ListImageFiles(sourcePath.value);
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "Backup ล้มเหลว";
   } finally {
