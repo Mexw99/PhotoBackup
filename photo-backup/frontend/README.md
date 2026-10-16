@@ -1,75 +1,24 @@
-# Nuxt Minimal Starter
+# PhotoBackup frontend
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+Nuxt 4 ทำงานแบบ client-side rendering ภายใน Wails WebView โดยใช้ hash routing
+และสร้าง static output ไปที่ `dist/` สำหรับฝังใน Go binary
 
-## Setup
-
-Make sure to install dependencies:
-
-```bash
-# npm
-npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
+```powershell
+npm ci
+npm run typecheck
+npm run generate
 ```
 
-## Development Server
+เริ่มพัฒนาแอปพร้อม Go bridge ด้วย `wails dev` จากโฟลเดอร์ด้านบน
+คำสั่ง `npm run dev` เปิดเฉพาะ frontend; native APIs ต้องเรียกจาก Wails
 
-Start the development server on `http://localhost:3000`:
+- `app/pages/`: template และการประกอบคอมโพเนนต์ตาม route
+- `app/layouts/`: โครงหน้าจอร่วม
+- `app/components/`: ส่วนแสดงผลที่นำกลับมาใช้ซ้ำ
+- `app/composables/`: state, API calls และ lifecycle ของแต่ละหน้า
+- `app/types/`: ชนิดข้อมูลร่วมที่อ้างอิง Wails generated types
+- `app/assets/css/`: CSS ส่วนกลาง
+- `config/`: build/dev helpers
+- `wailsjs/`: generated code จาก `wails generate module` หรือ `wails dev`
 
-```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
-```
-
-## Production
-
-Build the application for production:
-
-```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
-```
-
-Locally preview production build:
-
-```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
-```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+ดูรายละเอียดที่ [แนวทางจัดโครงสร้างโปรเจกต์](../docs/PROJECT_STRUCTURE.md)

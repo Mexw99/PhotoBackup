@@ -3,6 +3,10 @@ package main
 import (
 	"embed"
 
+	"photo-backup/database"
+	"photo-backup/repository"
+	"photo-backup/service"
+
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -14,6 +18,11 @@ var assets embed.FS
 func main() {
 	// Create an instance of the app structure
 	app := NewApp()
+	db, path, dbErr := database.OpenDefault()
+	app.database, app.dbPath, app.dbErr = db, path, dbErr
+	if dbErr == nil {
+		app.service = service.New(repository.New(db.GORM()))
+	}
 
 	// Create application with options
 	err := wails.Run(&options.App{

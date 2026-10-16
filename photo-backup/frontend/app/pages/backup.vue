@@ -1,9 +1,11 @@
 <template>
-  <main class="backup-page">
+  <div class="backup-page">
     <div class="page-heading">
       <div>
         <h1>Backup รูปภาพ</h1>
-        <p class="muted">เลือกโฟลเดอร์จาก Flash Drive แล้วตรวจสอบรายการรูปภาพก่อนเริ่ม Backup</p>
+        <p class="muted">
+          เลือกโฟลเดอร์จาก Flash Drive แล้วตรวจสอบรายการรูปภาพก่อนเริ่ม Backup
+        </p>
       </div>
     </div>
 
@@ -13,36 +15,75 @@
       <div class="field-group">
         <label for="source-path">โฟลเดอร์ต้นทาง</label>
         <div class="path-row">
-          <input id="source-path" v-model="sourcePath" readonly placeholder="ยังไม่ได้เลือกโฟลเดอร์" />
-          <button class="secondary-button" type="button" :disabled="backupRunning" @click="chooseSourceFolder">
+          <input
+            id="source-path"
+            v-model="sourcePath"
+            readonly
+            placeholder="ยังไม่ได้เลือกโฟลเดอร์"
+          />
+          <button
+            class="secondary-button"
+            type="button"
+            :disabled="backupRunning"
+            @click="chooseSourceFolder"
+          >
             {{ sourcePath ? "เลือกใหม่" : "เลือกโฟลเดอร์" }}
           </button>
-          <button v-if="sourcePath" class="clear-button" type="button" :disabled="backupRunning" @click="clearSourceFolder">
+          <button
+            v-if="sourcePath"
+            class="clear-button"
+            type="button"
+            :disabled="backupRunning"
+            @click="clearSourceFolder"
+          >
             ยกเลิก
           </button>
         </div>
       </div>
 
       <!-- โฟลเดอร์ปลายทาง -->
-      <div class="field-group" style="margin-top: 16px;">
+      <div class="field-group" style="margin-top: 16px">
         <label for="dest-path">โฟลเดอร์ปลายทาง (Backup ไปที่)</label>
         <div class="path-row">
-          <input id="dest-path" v-model="destPath" readonly placeholder="ยังไม่ได้เลือกโฟลเดอร์ปลายทาง" />
-          <button class="secondary-button" type="button" :disabled="backupRunning" @click="chooseDestFolder">
+          <input
+            id="dest-path"
+            v-model="destPath"
+            readonly
+            placeholder="ยังไม่ได้เลือกโฟลเดอร์ปลายทาง"
+          />
+          <button
+            class="secondary-button"
+            type="button"
+            :disabled="backupRunning"
+            @click="chooseDestFolder"
+          >
             {{ destPath ? "เลือกใหม่" : "เลือกโฟลเดอร์" }}
           </button>
-          <button v-if="destPath" class="clear-button" type="button" :disabled="backupRunning" @click="clearDestFolder">
+          <button
+            v-if="destPath"
+            class="clear-button"
+            type="button"
+            :disabled="backupRunning"
+            @click="clearDestFolder"
+          >
             ยกเลิก
           </button>
         </div>
       </div>
 
       <!-- ข้อความสถานะ -->
-      <div v-if="errorMessage" class="message error-message">{{ errorMessage }}</div>
-      <div v-if="sourcePath && !loading && !errorMessage && imageFiles.length > 0" class="message success-message">
+      <div v-if="errorMessage" class="message error-message">
+        {{ errorMessage }}
+      </div>
+      <div
+        v-if="sourcePath && !loading && !errorMessage && imageFiles.length > 0"
+        class="message success-message"
+      >
         พบรูปภาพ {{ imageFiles.length }} ไฟล์ที่รองรับ
       </div>
-      <div v-if="loading" class="message">กำลังค้นหารูปภาพในโฟลเดอร์ย่อย...</div>
+      <div v-if="loading" class="message">
+        กำลังค้นหารูปภาพในโฟลเดอร์ย่อย...
+      </div>
     </section>
 
     <!-- ======== รายการรูปภาพ ======== -->
@@ -63,7 +104,7 @@
       </ul>
 
       <!-- ปุ่มเริ่ม Backup -->
-      <div v-if="imageFiles.length > 0" style="margin-top: 16px;">
+      <div v-if="imageFiles.length > 0" style="margin-top: 16px">
         <button
           class="primary-button"
           type="button"
@@ -83,7 +124,10 @@
 
       <!-- Progress Bar -->
       <div class="progress-container">
-        <div class="progress-bar" :style="{ width: progressPercent + '%' }"></div>
+        <div
+          class="progress-bar"
+          :style="{ width: progressPercent + '%' }"
+        ></div>
       </div>
       <p class="progress-text">
         {{ progressCurrent }} / {{ progressTotal }} ไฟล์
@@ -103,167 +147,71 @@
       </div>
 
       <!-- รายการที่ล้มเหลว -->
-      <div v-if="backupDone && failedResults.length > 0" style="margin-top: 12px;">
-        <h3 style="color: #b91c1c; margin-bottom: 8px;">ไฟล์ที่ Backup ไม่สำเร็จ:</h3>
+      <div
+        v-if="backupDone && failedResults.length > 0"
+        style="margin-top: 12px"
+      >
+        <h3 style="color: #b91c1c; margin-bottom: 8px">
+          ไฟล์ที่ Backup ไม่สำเร็จ:
+        </h3>
         <ul class="file-list">
-          <li v-for="r in failedResults" :key="r.originalPath" class="file-item error-item">
+          <li
+            v-for="r in failedResults"
+            :key="r.originalPath"
+            class="file-item error-item"
+          >
             <span class="file-name">{{ r.originalName }}</span>
-            <span class="file-size" style="color: #b91c1c;">{{ r.error }}</span>
+            <span class="file-size" style="color: #b91c1c">{{ r.error }}</span>
           </li>
         </ul>
       </div>
 
       <!-- รายการที่สำเร็จ -->
-      <div v-if="backupDone && successResults.length > 0" style="margin-top: 12px;">
-        <h3 style="margin-bottom: 8px;">รูปที่ Backup สำเร็จ:</h3>
+      <div
+        v-if="backupDone && successResults.length > 0"
+        style="margin-top: 12px"
+      >
+        <h3 style="margin-bottom: 8px">รูปที่ Backup สำเร็จ:</h3>
         <ul class="file-list">
-          <li v-for="r in successResults" :key="r.backupPath" class="file-item success-item">
+          <li
+            v-for="r in successResults"
+            :key="r.backupPath"
+            class="file-item success-item"
+          >
             <span class="file-name">{{ r.originalName }}</span>
             <span class="file-size">→ {{ r.backupPath }}</span>
           </li>
         </ul>
       </div>
     </section>
-  </main>
+  </div>
 </template>
 
 <script setup lang="ts">
-import {
-  ListImageFiles,
-  SelectSourceFolder,
-  SelectDestFolder,
-  StartBackup,
-} from "../../wailsjs/go/main/App";
-import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime";
+import { useBackup } from "~/composables/useBackup";
 
-interface ImageFile {
-  name: string;
-  path: string;
-  size: number;
-}
-
-interface BackupResult {
-  originalName: string;
-  originalPath: string;
-  backupPath: string;
-  fileSize: number;
-  success: boolean;
-  error: string;
-}
-
-interface BackupSummary {
-  total: number;
-  success: number;
-  failed: number;
-  results: BackupResult[];
-}
-
-// ---------- State ----------
-const sourcePath = ref("");
-const destPath = ref("");
-const imageFiles = ref<ImageFile[]>([]);
-const loading = ref(false);
-const errorMessage = ref("");
-
-// Progress
-const backupRunning = ref(false);
-const backupDone = ref(false);
-const progressCurrent = ref(0);
-const progressTotal = ref(0);
-const progressName = ref("");
-const backupSummary = ref<BackupSummary>({ total: 0, success: 0, failed: 0, results: [] });
-
-const progressPercent = computed(() => {
-  if (progressTotal.value === 0) return 0;
-  return Math.round((progressCurrent.value / progressTotal.value) * 100);
-});
-
-const successResults = computed(() => backupSummary.value.results.filter((r) => r.success));
-const failedResults = computed(() => backupSummary.value.results.filter((r) => !r.success));
-
-// ---------- เลือกโฟลเดอร์ต้นทาง ----------
-async function chooseSourceFolder() {
-  errorMessage.value = "";
-  loading.value = true;
-
-  try {
-    const selectedPath = await SelectSourceFolder();
-    if (!selectedPath) return;
-
-    sourcePath.value = selectedPath;
-    imageFiles.value = await ListImageFiles(selectedPath);
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "ไม่สามารถอ่านโฟลเดอร์ได้";
-    imageFiles.value = [];
-  } finally {
-    loading.value = false;
-  }
-}
-
-function clearSourceFolder() {
-  sourcePath.value = "";
-  imageFiles.value = [];
-  errorMessage.value = "";
-  resetBackupState();
-}
-
-// ---------- เลือกโฟลเดอร์ปลายทาง ----------
-async function chooseDestFolder() {
-  try {
-    const selectedPath = await SelectDestFolder();
-    if (selectedPath) {
-      destPath.value = selectedPath;
-    }
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "ไม่สามารถเลือกโฟลเดอร์ได้";
-  }
-}
-
-function clearDestFolder() {
-  destPath.value = "";
-}
-
-// ---------- เริ่ม Backup ----------
-async function startBackup() {
-  if (!sourcePath.value || !destPath.value) return;
-
-  resetBackupState();
-  backupRunning.value = true;
-  errorMessage.value = "";
-
-  // ดักรับ event progress จาก Go backend
-  EventsOn("backup:progress", (data: any) => {
-    progressCurrent.value = data.current;
-    progressTotal.value = data.total;
-    progressName.value = data.name;
-  });
-
-  try {
-    const result = await StartBackup(sourcePath.value, destPath.value);
-    backupSummary.value = result;
-    backupDone.value = true;
-    imageFiles.value = await ListImageFiles(sourcePath.value);
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : "Backup ล้มเหลว";
-  } finally {
-    backupRunning.value = false;
-    EventsOff("backup:progress");
-  }
-}
-
-function resetBackupState() {
-  backupDone.value = false;
-  progressCurrent.value = 0;
-  progressTotal.value = 0;
-  progressName.value = "";
-  backupSummary.value = { total: 0, success: 0, failed: 0, results: [] };
-}
-
-function formatBytes(size: number) {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
+const {
+  sourcePath,
+  destPath,
+  imageFiles,
+  loading,
+  errorMessage,
+  backupRunning,
+  backupDone,
+  progressCurrent,
+  progressTotal,
+  progressName,
+  backupSummary,
+  progressPercent,
+  successResults,
+  failedResults,
+  chooseSourceFolder,
+  clearSourceFolder,
+  chooseDestFolder,
+  clearDestFolder,
+  startBackup,
+  formatBytes,
+} = useBackup();
 </script>
 
 <style scoped>

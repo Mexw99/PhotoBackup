@@ -5,6 +5,8 @@ import {backup} from '../models';
 
 export function AddTagToPhotos(arg1:Array<number>,arg2:string):Promise<main.TagSummary>;
 
+export function DeleteTag(arg1:number):Promise<void>;
+
 export function GetBackupFolder():Promise<string>;
 
 export function GetDatabasePath():Promise<string>;

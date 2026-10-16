@@ -1,5 +1,5 @@
 <template>
-  <main class="dashboard">
+  <div class="dashboard">
     <section class="intro">
       <h1>PhotoBackup</h1>
       <p>โปรแกรมสำรองรูปภาพจาก Flash Drive</p>
@@ -76,53 +76,21 @@
       ตำแหน่ง Database:
       <code>{{ databasePath }}</code>
     </p>
-  </main>
+  </div>
 </template>
 
 <script setup lang="ts">
-import {
-  GetDatabasePath,
-  GetDatabaseStatus,
-  GetPhotoCount,
-  GetRecentPhotos,
-  GetTagCount,
-  GetTags,
-} from "../../wailsjs/go/main/App";
+import { useDashboard } from "~/composables/useDashboard";
 
-import type { main } from "../../wailsjs/go/models";
-
-const databaseStatus = ref("กำลังตรวจสอบ...");
-const databasePath = ref("");
-const photoCount = ref(0);
-const tagCount = ref(0);
-const recentPhotos = ref<main.PhotoSummary[]>([]);
-const tags = ref<main.TagSummary[]>([]);
-const errorMessage = ref("");
-
-onMounted(async () => {
-  try {
-    const [status, path, photosCount, tagsCount, photos, tagList] =
-      await Promise.all([
-        GetDatabaseStatus(),
-        GetDatabasePath(),
-        GetPhotoCount(),
-        GetTagCount(),
-        GetRecentPhotos(6),
-        GetTags(),
-      ]);
-
-    databaseStatus.value = status;
-    databasePath.value = path;
-    photoCount.value = photosCount;
-    tagCount.value = tagsCount;
-    recentPhotos.value = photos;
-    tags.value = tagList;
-  } catch (error) {
-    errorMessage.value = "ไม่สามารถโหลดข้อมูลจาก Database ได้";
-
-    console.error(error);
-  }
-});
+const {
+  databaseStatus,
+  databasePath,
+  photoCount,
+  tagCount,
+  recentPhotos,
+  tags,
+  errorMessage,
+} = useDashboard();
 </script>
 
 <style scoped>
