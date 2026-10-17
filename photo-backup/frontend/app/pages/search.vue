@@ -1,11 +1,12 @@
 <template>
-  <main class="search-page">
+  <div class="search-page">
     <!-- Header -->
     <header class="page-header">
       <div class="header-titles">
         <h1 class="page-title">ค้นหารูปภาพด้วย Tag</h1>
         <p class="page-description">
-          ค้นหาและกรองรูปภาพที่สำรองไว้ด้วย Tag โดยเลือกจาก Tag Cloud หรือพิมพ์ค้นหา
+          ค้นหาและกรองรูปภาพที่สำรองไว้ด้วย Tag โดยเลือกจาก Tag Cloud
+          หรือพิมพ์ค้นหา
         </p>
       </div>
       <div v-if="!initialLoading && !error" class="header-stats">
@@ -42,7 +43,9 @@
       <div class="cloud-section">
         <div class="section-title-row">
           <h2 class="section-title">Tag Cloud ในระบบ</h2>
-          <span class="section-hint">คลิก Tag เพื่อเพิ่มหรือลบออกจากเงื่อนไขค้นหา</span>
+          <span class="section-hint"
+            >คลิก Tag เพื่อเพิ่มหรือลบออกจากเงื่อนไขค้นหา</span
+          >
         </div>
         <TagCloud
           :tags="tagCloud"
@@ -86,15 +89,13 @@
       </div>
 
       <!-- Empty State: กรณีไม่พบรูปภาพ -->
-      <div
-        v-else-if="photos.length === 0"
-        class="state-view empty-view"
-      >
+      <div v-else-if="photos.length === 0" class="state-view empty-view">
         <div class="empty-icon">🔍</div>
         <h3 v-if="selectedTags.length > 0">ไม่พบรูปภาพที่ตรงกับเงื่อนไข</h3>
         <h3 v-else>ยังไม่มีรูปภาพในระบบ หรือไม่มีรูปภาพที่ผูก Tag</h3>
         <p v-if="selectedTags.length > 0">
-          ลองสลับเป็นโหมด <strong>OR</strong> หรือคลิกล้างตัวกรองเพื่อดูรูปภาพทั้งหมด
+          ลองสลับเป็นโหมด
+          <strong>OR</strong> หรือคลิกล้างตัวกรองเพื่อดูรูปภาพทั้งหมด
         </p>
         <p v-else>
           คุณสามารถสำรองรูปภาพในหน้า Backup และจัดกลุ่มรูปภาพในหน้าจัดการ Tag
@@ -150,7 +151,10 @@
               >
                 #{{ tag.name }}
               </span>
-              <span v-if="!photo.tags || photo.tags.length === 0" class="no-tag-hint">
+              <span
+                v-if="!photo.tags || photo.tags.length === 0"
+                class="no-tag-hint"
+              >
                 ไม่มี Tag
               </span>
             </div>
@@ -168,161 +172,35 @@
       :photo="selectedPhotoForModal"
       @close="selectedPhotoForModal = null"
     />
-  </main>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import {
-  GetTagCloud,
-  GetTags,
-  SearchPhotos,
-  GetTaggedPhotos,
-} from "../../wailsjs/go/main/App";
-import type { main } from "../../wailsjs/go/models";
+import SearchBar from "~/components/search/search-bar.vue";
+import SearchFilterBar from "~/components/search/search-filter-bar.vue";
+import PhotoDetailModal from "~/components/search/photo-detail-modal.vue";
+import TagCloud from "~/components/tag-cloud/tag-cloud.vue";
+import { usePhotoSearch } from "~/composables/usePhotoSearch";
 
-import SearchBar from "../../components/search/SearchBar.vue";
-import SearchFilterBar, { type MatchMode } from "../../components/search/SearchFilterBar.vue";
-import PhotoDetailModal from "../../components/search/PhotoDetailModal.vue";
-import TagCloud, { type TagCloudItem } from "../../components/tag-cloud/TagCloud.vue";
-
-// ข้อมูลสถานะ
-const availableTags = ref<Array<{ id: number; name: string; photoCount?: number }>>([]);
-const tagCloud = ref<TagCloudItem[]>([]);
-const photos = ref<main.TaggedPhotoSummary[]>([]);
-const selectedTags = ref<string[]>([]);
-const matchMode = ref<MatchMode>("OR");
-
-const initialLoading = ref(true);
-const searching = ref(false);
-const error = ref<string | null>(null);
-
-// Modal state
-const selectedPhotoForModal = ref<main.TaggedPhotoSummary | null>(null);
-
-// ตรวจสอบว่า Tag นั้นตรงกับเงื่อนไขค้นหาที่เลือกไว้หรือไม่
-function isTagMatched(tagName: string): boolean {
-  if (selectedTags.value.length === 0) return false;
-  const target = tagName.toLowerCase();
-  return selectedTags.value.some((t) => t.toLowerCase() === target);
-}
-
-// โหลดข้อมูลเริ่มต้น (Tag Cloud, รายการ Tags, รูปภาพ)
-async function loadInitialData() {
-  initialLoading.value = true;
-  error.value = null;
-
-  try {
-    const [cloudData, allTags, initialPhotos] = await Promise.all([
-      GetTagCloud(),
-      GetTags(),
-      selectedTags.value.length > 0
-        ? SearchPhotos(selectedTags.value, matchMode.value)
-        : GetTaggedPhotos(),
-    ]);
-
-    tagCloud.value = cloudData ?? [];
-    availableTags.value = (allTags ?? []).map((t) => {
-      const foundInCloud = (cloudData ?? []).find((c) => c.id === t.id);
-      return {
-        id: t.id,
-        name: t.name,
-        photoCount: foundInCloud?.photoCount ?? 0,
-      };
-    });
-    photos.value = initialPhotos ?? [];
-  } catch (err) {
-    console.error("Load initial search data error:", err);
-    error.value =
-      err instanceof Error ? err.message : "ไม่สามารถโหลดข้อมูลจากฐานข้อมูลได้";
-  } finally {
-    initialLoading.value = false;
-  }
-}
-
-// ทำการค้นหารูปภาพจากฐานข้อมูลผ่าน Wails API
-async function executeSearch() {
-  searching.value = true;
-  error.value = null;
-
-  try {
-    if (selectedTags.value.length === 0) {
-      // หากไม่มี Tag ที่เลือก ให้แสดงรูปภาพที่สำรองไว้ทั้งหมด
-      const allPhotos = await GetTaggedPhotos();
-      photos.value = allPhotos ?? [];
-    } else {
-      const results = await SearchPhotos(selectedTags.value, matchMode.value);
-      photos.value = results ?? [];
-    }
-  } catch (err) {
-    console.error("Execute search error:", err);
-    error.value =
-      err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการค้นหารูปภาพ";
-  } finally {
-    searching.value = false;
-  }
-}
-
-// เพิ่ม Tag เข้าสู่เงื่อนไขการค้นหา
-function addTag(tagName: string) {
-  const trimmed = tagName.trim();
-  if (!trimmed) return;
-
-  const exists = selectedTags.value.some(
-    (t) => t.toLowerCase() === trimmed.toLowerCase(),
-  );
-
-  if (!exists) {
-    selectedTags.value = [...selectedTags.value, trimmed];
-    executeSearch();
-  }
-}
-
-// ลบ Tag ออกจากเงื่อนไขการค้นหา
-function removeTag(tagName: string) {
-  selectedTags.value = selectedTags.value.filter(
-    (t) => t.toLowerCase() !== tagName.toLowerCase(),
-  );
-  executeSearch();
-}
-
-// สลับสถานะ Tag (เพิ่ม/ลบ) เมื่อคลิกที่ Tag Cloud
-function toggleTag(tagName: string) {
-  const exists = selectedTags.value.some(
-    (t) => t.toLowerCase() === tagName.toLowerCase(),
-  );
-
-  if (exists) {
-    removeTag(tagName);
-  } else {
-    addTag(tagName);
-  }
-}
-
-// เปลี่ยนโหมด AND / OR
-function setMatchMode(newMode: MatchMode) {
-  if (matchMode.value !== newMode) {
-    matchMode.value = newMode;
-    if (selectedTags.value.length > 0) {
-      executeSearch();
-    }
-  }
-}
-
-// ล้างตัวกรองทั้งหมด
-function clearFilters() {
-  selectedTags.value = [];
-  executeSearch();
-}
-
-// เปิด Modal ดูรายละเอียดรูปภาพ
-function openPhotoDetail(photo: main.TaggedPhotoSummary) {
-  selectedPhotoForModal.value = photo;
-}
-
-onMounted(() => {
-  loadInitialData();
-});
+const {
+  availableTags,
+  tagCloud,
+  photos,
+  selectedTags,
+  matchMode,
+  initialLoading,
+  searching,
+  error,
+  selectedPhotoForModal,
+  isTagMatched,
+  loadInitialData,
+  addTag,
+  removeTag,
+  toggleTag,
+  setMatchMode,
+  clearFilters,
+  openPhotoDetail,
+} = usePhotoSearch();
 </script>
 
 <style scoped>
@@ -598,7 +476,9 @@ onMounted(() => {
   background: #ffffff;
   border-color: #93c5fd;
   transform: translateY(-2px);
-  box-shadow: 0 8px 16px -4px rgba(37, 99, 235, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 8px 16px -4px rgba(37, 99, 235, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.04);
 }
 
 .photo-card:focus-visible {
@@ -706,7 +586,9 @@ onMounted(() => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 768px) {
