@@ -22,6 +22,7 @@
         <div class="photo-info">
           <strong>{{ photo.originalName }}</strong>
           <small>{{ photo.backedUpAt }}</small>
+          <small v-if="photo.colorTag">สีหลัก: {{ photo.colorTag }}</small>
           <small class="path">{{ photo.backupPath }}</small>
         </div>
         <div class="photo-tags">
@@ -124,6 +125,7 @@ function togglePhoto(photoID: number, checked: boolean) {
 .photo-info small {
   color: #64748b;
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .photo-tags {
   display: flex;

@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
 	"photo-backup/backup"
 	"photo-backup/service"
 )
@@ -28,11 +30,29 @@ func (a *App) ListImageFiles(sourcePath string) ([]backup.ImageFile, error) {
 
 func (a *App) GetBackupFolder() string { return service.DefaultBackupFolder() }
 
+func (a *App) GetBackupSettings() (BackupSettings, error) {
+	if a.service == nil {
+		return BackupSettings{}, fmt.Errorf("database is not ready")
+	}
+	setting, err := a.service.GetBackupSettings()
+	return BackupSettings{SourcePath: setting.Source, DestPath: setting.Dest}, err
+}
+
+func (a *App) SaveBackupSettings(sourcePath, destPath string) error {
+	if a.service == nil {
+		return fmt.Errorf("database is not ready")
+	}
+	return a.service.SaveBackupSettings(sourcePath, destPath)
+}
+
 func (a *App) StartBackup(sourcePath, destPath string) (backup.BackupSummary, error) {
 	if a.service == nil {
 		return backup.BackupSummary{}, fmt.Errorf("database is not connected")
 	}
 	return a.service.StartBackup(sourcePath, destPath, func(current, total int, name string) {
+		if a.ctx == nil {
+			return
+		}
 		runtime.EventsEmit(a.ctx, "backup:progress", map[string]interface{}{
 			"current": current, "total": total, "name": name,
 		})

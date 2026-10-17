@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"photo-backup/repository"
@@ -9,12 +10,13 @@ import (
 
 // Service coordinates business operations without depending on the Wails runtime.
 type Service struct {
-	ctx   context.Context
-	store repository.Store
+	ctx          context.Context
+	store        repository.Store
+	removeSource func(string) error
 }
 
 func New(store repository.Store) *Service {
-	return &Service{ctx: context.Background(), store: store}
+	return &Service{ctx: context.Background(), store: store, removeSource: os.Remove}
 }
 
 // SetContext is called once during Wails startup before frontend requests begin.

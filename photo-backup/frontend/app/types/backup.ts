@@ -9,11 +9,12 @@ export type BackupResult = Pick<
   | "backupPath"
   | "fileSize"
   | "success"
+  | "skipped"
   | "error"
 >;
 export type BackupSummary = Pick<
   backup.BackupSummary,
-  "total" | "success" | "failed"
+  "total" | "success" | "skipped" | "failed"
 > & {
   results: BackupResult[];
 };

@@ -6,6 +6,9 @@
         <p class="muted">
           เลือกโฟลเดอร์จาก Flash Drive แล้วตรวจสอบรายการรูปภาพก่อนเริ่ม Backup
         </p>
+        <p class="muted">
+          ย้ายรูปภาพไปยังปลายทาง และลบไฟล์ต้นทางเฉพาะรูปที่ย้ายสำเร็จ
+        </p>
       </div>
     </div>
 
@@ -24,7 +27,7 @@
           <button
             class="secondary-button"
             type="button"
-            :disabled="backupRunning"
+            :disabled="backupRunning || loading || settingsSaving"
             @click="chooseSourceFolder"
           >
             {{ sourcePath ? "เลือกใหม่" : "เลือกโฟลเดอร์" }}
@@ -33,7 +36,7 @@
             v-if="sourcePath"
             class="clear-button"
             type="button"
-            :disabled="backupRunning"
+            :disabled="backupRunning || loading || settingsSaving"
             @click="clearSourceFolder"
           >
             ยกเลิก
@@ -54,7 +57,7 @@
           <button
             class="secondary-button"
             type="button"
-            :disabled="backupRunning"
+            :disabled="backupRunning || loading || settingsSaving"
             @click="chooseDestFolder"
           >
             {{ destPath ? "เลือกใหม่" : "เลือกโฟลเดอร์" }}
@@ -63,7 +66,7 @@
             v-if="destPath"
             class="clear-button"
             type="button"
-            :disabled="backupRunning"
+            :disabled="backupRunning || loading || settingsSaving"
             @click="clearDestFolder"
           >
             ยกเลิก
@@ -71,9 +74,32 @@
         </div>
       </div>
 
+      <div class="folder-actions">
+        <button
+          class="clear-button"
+          type="button"
+          :disabled="!sourcePath || backupRunning || loading || settingsSaving"
+          @click="readSourceFiles"
+        >
+          ตรวจรายการใหม่
+        </button>
+        <button
+          class="clear-button"
+          type="button"
+          :disabled="!sourcePath || !destPath || backupRunning || loading || settingsSaving"
+          @click="saveSettings"
+        >
+          {{ settingsSaving ? "กำลังบันทึก..." : "บันทึกโฟลเดอร์" }}
+        </button>
+        <span class="muted">ระบบจะบันทึกโฟลเดอร์ให้อีกครั้งเมื่อเริ่ม Backup</span>
+      </div>
+
       <!-- ข้อความสถานะ -->
       <div v-if="errorMessage" class="message error-message">
         {{ errorMessage }}
+      </div>
+      <div v-if="settingsMessage" class="message success-message" role="status">
+        {{ settingsMessage }}
       </div>
       <div
         v-if="sourcePath && !loading && !errorMessage && imageFiles.length > 0"
@@ -94,7 +120,13 @@
       </div>
 
       <div v-if="!imageFiles.length && !loading" class="empty-state">
-        เลือกโฟลเดอร์เพื่อแสดงรายการไฟล์ .jpg, .jpeg และ .png
+        <span v-if="backupDone && !errorMessage">
+          ย้ายรูปภาพแล้ว ไม่มีรูปภาพเหลือในโฟลเดอร์ต้นทาง
+        </span>
+        <span v-else-if="sourcePath">
+          ไม่พบรูปภาพที่อ่านได้ กรุณาเลือกโฟลเดอร์ที่มีไฟล์ .jpg, .jpeg หรือ .png
+        </span>
+        <span v-else>เลือกโฟลเดอร์เพื่อแสดงรายการไฟล์ .jpg, .jpeg และ .png</span>
       </div>
       <ul v-else class="file-list">
         <li v-for="file in imageFiles" :key="file.path" class="file-item">
@@ -108,7 +140,7 @@
         <button
           class="primary-button"
           type="button"
-          :disabled="!sourcePath || !destPath || backupRunning"
+          :disabled="!sourcePath || !destPath || backupRunning || loading || settingsSaving"
           @click="startBackup"
         >
           {{ backupRunning ? "กำลัง Backup..." : "เริ่ม Backup" }}
@@ -138,12 +170,30 @@
       <div v-if="backupDone" class="result-summary">
         <div class="result-card success">
           <strong>{{ backupSummary.success }}</strong>
-          <span>สำเร็จ</span>
+          <span>ย้ายสำเร็จ</span>
         </div>
-        <div class="result-card error" v-if="backupSummary.failed > 0">
+        <div class="result-card skipped">
+          <strong>{{ backupSummary.skipped }}</strong>
+          <span>ใช้ไฟล์ปลายทางเดิม</span>
+        </div>
+        <div class="result-card error">
           <strong>{{ backupSummary.failed }}</strong>
           <span>ล้มเหลว</span>
         </div>
+      </div>
+
+      <div v-if="backupDone && skippedResults.length > 0" class="skipped-list">
+        <h3>รูปที่ใช้ไฟล์ปลายทางเดิมและย้ายสำเร็จ:</h3>
+        <ul class="file-list">
+          <li
+            v-for="result in skippedResults"
+            :key="result.originalPath"
+            class="file-item"
+          >
+            <span class="file-name">{{ result.originalName }}</span>
+            <span class="file-size">ตรวจไฟล์เดิมแล้ว ลบต้นทางสำเร็จ</span>
+          </li>
+        </ul>
       </div>
 
       <!-- รายการที่ล้มเหลว -->
@@ -152,7 +202,7 @@
         style="margin-top: 12px"
       >
         <h3 style="color: #b91c1c; margin-bottom: 8px">
-          ไฟล์ที่ Backup ไม่สำเร็จ:
+          ไฟล์ที่ยังย้ายไม่สำเร็จ (ยังอยู่ต้นทาง):
         </h3>
         <ul class="file-list">
           <li
@@ -171,7 +221,7 @@
         v-if="backupDone && successResults.length > 0"
         style="margin-top: 12px"
       >
-        <h3 style="margin-bottom: 8px">รูปที่ Backup สำเร็จ:</h3>
+        <h3 style="margin-bottom: 8px">รูปที่ย้ายไปยังปลายทางแล้ว:</h3>
         <ul class="file-list">
           <li
             v-for="r in successResults"
@@ -196,6 +246,8 @@ const {
   imageFiles,
   loading,
   errorMessage,
+  settingsMessage,
+  settingsSaving,
   backupRunning,
   backupDone,
   progressCurrent,
@@ -204,11 +256,14 @@ const {
   backupSummary,
   progressPercent,
   successResults,
+  skippedResults,
   failedResults,
+  readSourceFiles,
   chooseSourceFolder,
   clearSourceFolder,
   chooseDestFolder,
   clearDestFolder,
+  saveSettings,
   startBackup,
   formatBytes,
 } = useBackup();
@@ -259,6 +314,26 @@ const {
 .path-row {
   display: flex;
   gap: 10px;
+}
+
+.folder-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.folder-actions span {
+  font-size: 0.85rem;
+}
+
+.skipped-list {
+  margin-top: 12px;
+}
+
+.skipped-list h3 {
+  margin-bottom: 8px;
 }
 
 input {
@@ -436,6 +511,11 @@ button:disabled {
 .result-card.error {
   background: #fef2f2;
   color: #b91c1c;
+}
+
+.result-card.skipped {
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 @media (max-width: 650px) {

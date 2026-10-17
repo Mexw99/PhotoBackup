@@ -60,10 +60,23 @@ func OpenAt(path string) (*Database, error) {
 		return nil, err
 	}
 
-	if err := conn.AutoMigrate(
-		&model.Photo{},
-		&model.Tag{},
-	); err != nil {
+	if err := conn.Transaction(func(tx *gorm.DB) error {
+		if tx.Migrator().HasColumn(&model.Photo{}, "description") {
+			// ลบคอลัมน์เก่าผ่าน SQLite โดยคงตารางและ indexes อื่นไว้
+			if err := tx.Exec("ALTER TABLE photos DROP COLUMN description").Error; err != nil {
+				return err
+			}
+		}
+		return tx.AutoMigrate(
+			&model.Photo{},
+			&model.Tag{},
+			&model.FileRecord{},
+			&model.Setting{},
+		)
+	}); err != nil {
+		if sqlDB, closeErr := conn.DB(); closeErr == nil {
+			_ = sqlDB.Close()
+		}
 		return nil, err
 	}
 

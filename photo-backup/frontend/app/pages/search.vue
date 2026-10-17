@@ -3,15 +3,14 @@
     <!-- Header -->
     <header class="page-header">
       <div class="header-titles">
-        <h1 class="page-title">ค้นหารูปภาพด้วย Tag</h1>
+        <h1 class="page-title">ค้นหารูปภาพ</h1>
         <p class="page-description">
-          ค้นหาและกรองรูปภาพที่สำรองไว้ด้วย Tag โดยเลือกจาก Tag Cloud
-          หรือพิมพ์ค้นหา
+          ค้นหาชื่อไฟล์ แล้วคลิก Tag จาก Tag Cloud เพื่อกรองรูปภาพ
         </p>
       </div>
       <div v-if="!initialLoading && !error" class="header-stats">
         <span class="stat-badge">
-          🏷️ <strong>{{ availableTags.length }}</strong> Tags ทั้งหมด
+          🏷️ <strong>{{ tagCloud.length }}</strong> Tags ทั้งหมด
         </span>
       </div>
     </header>
@@ -30,21 +29,27 @@
 
     <!-- แผงค้นหาและตัวกรอง -->
     <section class="panel search-controls-panel">
-      <!-- Search Bar พร้อม Auto-suggest -->
-      <div class="control-row">
-        <SearchBar
-          :available-tags="availableTags"
-          :selected-tags="selectedTags"
-          @select="addTag"
-        />
-      </div>
+      <form class="text-search" @submit.prevent="executeSearch">
+        <label for="photo-search">ค้นหาชื่อไฟล์</label>
+        <div class="text-search-row">
+          <input
+            id="photo-search"
+            v-model="searchText"
+            type="search"
+            placeholder="เช่น IMG_001.jpg"
+          />
+          <button type="submit" class="retry-btn" :disabled="initialLoading || searching">
+            ค้นหา
+          </button>
+        </div>
+      </form>
 
       <!-- Tag Cloud -->
       <div class="cloud-section">
         <div class="section-title-row">
           <h2 class="section-title">Tag Cloud ในระบบ</h2>
           <span class="section-hint"
-            >คลิก Tag เพื่อเพิ่มหรือลบออกจากเงื่อนไขค้นหา</span
+            >เลือกได้หลาย Tag เพื่อแสดงรูปเพิ่ม กดซ้ำเพื่อยกเลิก</span
           >
         </div>
         <TagCloud
@@ -54,16 +59,6 @@
           @toggle="toggleTag"
         />
       </div>
-
-      <!-- แถบจัดการ Filter และตัวเลือก AND / OR -->
-      <SearchFilterBar
-        v-if="selectedTags.length > 0"
-        :selected-tags="selectedTags"
-        :mode="matchMode"
-        @update:mode="setMatchMode"
-        @remove="removeTag"
-        @clear="clearFilters"
-      />
     </section>
 
     <!-- ส่วนแสดงผลลัพธ์รูปภาพ -->
@@ -74,11 +69,6 @@
           <span v-if="!searching && !initialLoading" class="result-count-badge">
             {{ photos.length }} รูปภาพ
           </span>
-        </div>
-
-        <div v-if="selectedTags.length > 0" class="active-filter-summary">
-          กรองด้วย:
-          <strong>{{ selectedTags.length }} Tag</strong> (โหมด {{ matchMode }})
         </div>
       </div>
 
@@ -91,23 +81,14 @@
       <!-- Empty State: กรณีไม่พบรูปภาพ -->
       <div v-else-if="photos.length === 0" class="state-view empty-view">
         <div class="empty-icon">🔍</div>
-        <h3 v-if="selectedTags.length > 0">ไม่พบรูปภาพที่ตรงกับเงื่อนไข</h3>
-        <h3 v-else>ยังไม่มีรูปภาพในระบบ หรือไม่มีรูปภาพที่ผูก Tag</h3>
-        <p v-if="selectedTags.length > 0">
-          ลองสลับเป็นโหมด
-          <strong>OR</strong> หรือคลิกล้างตัวกรองเพื่อดูรูปภาพทั้งหมด
+        <h3 v-if="selectedTags.length > 0 || searchText">ไม่พบรูปภาพที่ตรงกับเงื่อนไข</h3>
+        <h3 v-else>ยังไม่มีรูปภาพในระบบ</h3>
+        <p v-if="selectedTags.length > 0 || searchText">
+          ลองเปลี่ยนชื่อไฟล์ หรือกด Tag ที่เลือกไว้อีกครั้งเพื่อยกเลิก
         </p>
         <p v-else>
           คุณสามารถสำรองรูปภาพในหน้า Backup และจัดกลุ่มรูปภาพในหน้าจัดการ Tag
         </p>
-        <button
-          v-if="selectedTags.length > 0"
-          type="button"
-          class="reset-filters-btn"
-          @click="clearFilters"
-        >
-          ล้างตัวกรองทั้งหมด
-        </button>
       </div>
 
       <!-- Grid แสดงรูปภาพผลลัพธ์จริง -->
@@ -116,12 +97,7 @@
           v-for="photo in photos"
           :key="photo.id"
           class="photo-card"
-          tabindex="0"
-          role="button"
-          :aria-label="`ดูรายละเอียด ${photo.originalName}`"
           @click="openPhotoDetail(photo)"
-          @keydown.enter="openPhotoDetail(photo)"
-          @keydown.space.prevent="openPhotoDetail(photo)"
         >
           <div class="photo-icon-box">
             <img
@@ -161,7 +137,14 @@
           </div>
 
           <div class="photo-card-action">
-            <span class="view-detail-hint">ดูรายละเอียด ➔</span>
+            <button
+              type="button"
+              class="view-detail-hint"
+              :aria-label="`ดูรายละเอียด ${photo.originalName}`"
+              @click.stop="openPhotoDetail(photo)"
+            >
+              ดูรายละเอียด ➔
+            </button>
           </div>
         </article>
       </div>
@@ -176,34 +159,53 @@
 </template>
 
 <script setup lang="ts">
-import SearchBar from "~/components/search/search-bar.vue";
-import SearchFilterBar from "~/components/search/search-filter-bar.vue";
 import PhotoDetailModal from "~/components/search/photo-detail-modal.vue";
 import TagCloud from "~/components/tag-cloud/tag-cloud.vue";
 import { usePhotoSearch } from "~/composables/usePhotoSearch";
 
 const {
-  availableTags,
   tagCloud,
   photos,
+  searchText,
   selectedTags,
-  matchMode,
   initialLoading,
   searching,
   error,
   selectedPhotoForModal,
   isTagMatched,
   loadInitialData,
-  addTag,
-  removeTag,
+  executeSearch,
   toggleTag,
-  setMatchMode,
-  clearFilters,
   openPhotoDetail,
 } = usePhotoSearch();
 </script>
 
 <style scoped>
+.text-search {
+  display: grid;
+  gap: 8px;
+}
+
+.text-search label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.text-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.text-search input {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  flex: 1;
+  min-width: 180px;
+  padding: 10px 12px;
+}
+
 .search-page {
   display: flex;
   flex-direction: column;
@@ -271,10 +273,6 @@ const {
   gap: 20px;
 }
 
-.control-row {
-  width: 100%;
-}
-
 .cloud-section {
   display: flex;
   flex-direction: column;
@@ -339,15 +337,6 @@ const {
   padding: 3px 10px;
   border-radius: 9999px;
   border: 1px solid #dbeafe;
-}
-
-.active-filter-summary {
-  font-size: 0.85rem;
-  color: #64748b;
-}
-
-.active-filter-summary strong {
-  color: #1e293b;
 }
 
 /* States */
@@ -434,23 +423,6 @@ const {
   line-height: 1.5;
 }
 
-.reset-filters-btn {
-  margin-top: 10px;
-  background: #2563eb;
-  color: white;
-  border: none;
-  padding: 8px 18px;
-  border-radius: 8px;
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-
-.reset-filters-btn:hover {
-  background: #1d4ed8;
-}
-
 /* Photos Grid */
 .photos-grid {
   display: grid;
@@ -469,7 +441,6 @@ const {
   cursor: pointer;
   position: relative;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  outline: none;
 }
 
 .photo-card:hover {
@@ -479,11 +450,6 @@ const {
   box-shadow:
     0 8px 16px -4px rgba(37, 99, 235, 0.1),
     0 4px 6px -2px rgba(0, 0, 0, 0.04);
-}
-
-.photo-card:focus-visible {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
 }
 
 .photo-icon-box {
@@ -574,15 +540,25 @@ const {
   transition: opacity 0.15s ease;
 }
 
-.photo-card:hover .photo-card-action {
+.photo-card:hover .photo-card-action,
+.photo-card:focus-within .photo-card-action {
   opacity: 1;
 }
 
 .view-detail-hint {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
   font-size: 0.75rem;
   font-weight: 700;
   color: #2563eb;
   white-space: nowrap;
+}
+
+.view-detail-hint:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
 }
 
 @keyframes spin {

@@ -3,7 +3,9 @@ package repository
 import (
 	"context"
 	"errors"
+
 	"gorm.io/gorm"
+
 	"photo-backup/model"
 )
 
@@ -13,6 +15,10 @@ var ErrEmptyTagName = errors.New("tag name is empty")
 type Store interface {
 	WithContext(context.Context) Store
 	CreatePhoto(*model.Photo) error
+	FindBackup(string, string) (*model.Photo, error)
+	SaveBackup(*model.Photo) error
+	GetSettings() (model.Setting, error)
+	SaveSettings(string, string) error
 	ListPhotos() ([]model.Photo, error)
 	RecentPhotos(int) ([]model.Photo, error)
 	CountPhotos() (int64, error)
@@ -21,7 +27,8 @@ type Store interface {
 	AddTagToPhotos([]uint, string) (*model.Tag, error)
 	RemoveTagFromPhoto(uint, uint) error
 	DeleteTag(uint) error
-	SearchPhotosByTags([]string, string) ([]model.Photo, error)
+	SearchPhotosByTags([]string) ([]model.Photo, error)
+	SearchPhotos(string, []string) ([]model.Photo, error)
 	GetTagCloud() ([]TagCount, error)
 }
 

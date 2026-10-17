@@ -1,16 +1,20 @@
 package repository
 
 import (
-	"photo-backup/model"
 	"strings"
+
+	"photo-backup/model"
 )
 
-// SearchPhotosByTags ค้นหารูปภาพตามชื่อ Tag ด้วยโหมด "AND" หรือ "OR"
-// ป้องกัน SQL Injection โดยใช้ parameterized queries และ GORM methods
-func (r *Repository) SearchPhotosByTags(tagNames []string, mode string) ([]model.Photo, error) {
-	// 1. ทำความสะอาดและกรอง Tag ที่ซ้ำ/ว่าง
+// เลือกหลาย Tag จะรวมรูปของทุก Tag ที่เลือก ไม่เลือกจะแสดงทั้งหมด
+func (r *Repository) SearchPhotosByTags(tagNames []string) ([]model.Photo, error) {
+	return r.SearchPhotos("", tagNames)
+}
+
+// SearchPhotos ใช้ชื่อไฟล์ร่วมกับแท็กที่เลือกได้
+func (r *Repository) SearchPhotos(query string, tagNames []string) ([]model.Photo, error) {
+	// ตัดแท็กซ้ำ/ว่าง และเทียบชื่อโดยไม่แยกตัวพิมพ์ใหญ่เล็ก
 	uniqueMap := make(map[string]bool)
-	var cleanTags []string
 	var lowerTags []string
 
 	for _, name := range tagNames {
@@ -21,57 +25,24 @@ func (r *Repository) SearchPhotosByTags(tagNames []string, mode string) ([]model
 		lower := strings.ToLower(trimmed)
 		if !uniqueMap[lower] {
 			uniqueMap[lower] = true
-			cleanTags = append(cleanTags, trimmed)
 			lowerTags = append(lowerTags, lower)
 		}
 	}
 
-	// หากไม่มี Tag ที่ส่งมา ให้คืนรายการรูปภาพทั้งหมด
-	if len(cleanTags) == 0 {
-		return r.ListPhotos()
-	}
-
-	normalizedMode := strings.ToUpper(strings.TrimSpace(mode))
-	if normalizedMode != "AND" {
-		normalizedMode = "OR"
-	}
-
 	var photos []model.Photo
-
-	if normalizedMode == "AND" {
-		// โหมด AND: รูปภาพต้องมี Tag ครบทุกรายการที่เลือก
-		subQuery := r.db.Model(&model.Photo{}).
-			Select("photos.id").
-			Joins("JOIN photo_tags ON photo_tags.photo_id = photos.id").
-			Joins("JOIN tags ON tags.id = photo_tags.tag_id").
-			Where("LOWER(tags.name) IN ?", lowerTags).
-			Group("photos.id").
-			Having("COUNT(DISTINCT LOWER(tags.name)) = ?", len(lowerTags))
-
-		err := r.db.
-			Preload("Tags").
-			Where("id IN (?)", subQuery).
-			Order("backed_up_at DESC").
-			Find(&photos).
-			Error
-
-		return photos, err
+	photoQuery := r.db.Preload("Tags").Order("backed_up_at DESC")
+	if query = strings.TrimSpace(query); query != "" {
+		pattern := "%" + strings.ToLower(query) + "%"
+		photoQuery = photoQuery.Where("LOWER(original_name) LIKE ?", pattern)
 	}
 
-	// โหมด OR: รูปภาพต้องมี Tag อย่างน้อยหนึ่งรายการที่เลือก
-	subQuery := r.db.Model(&model.Photo{}).
-		Select("photos.id").
-		Joins("JOIN photo_tags ON photo_tags.photo_id = photos.id").
-		Joins("JOIN tags ON tags.id = photo_tags.tag_id").
-		Where("LOWER(tags.name) IN ?", lowerTags).
-		Distinct()
-
-	err := r.db.
-		Preload("Tags").
-		Where("id IN (?)", subQuery).
-		Order("backed_up_at DESC").
-		Find(&photos).
-		Error
-
+	if len(lowerTags) > 0 {
+		subQuery := r.db.Table("photo_tags").
+			Select("photo_tags.photo_id").
+			Joins("JOIN tags ON tags.id = photo_tags.tag_id").
+			Where("LOWER(tags.name) IN ?", lowerTags)
+		photoQuery = photoQuery.Where("photos.id IN (?)", subQuery)
+	}
+	err := photoQuery.Find(&photos).Error
 	return photos, err
 }

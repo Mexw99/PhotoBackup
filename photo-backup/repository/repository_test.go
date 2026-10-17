@@ -185,7 +185,7 @@ func TestSearchPhotosByTags(t *testing.T) {
 	}
 
 	t.Run("EmptyQueryReturnsAllPhotos", func(t *testing.T) {
-		res, err := repo.SearchPhotosByTags([]string{}, "OR")
+		res, err := repo.SearchPhotosByTags([]string{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -195,7 +195,7 @@ func TestSearchPhotosByTags(t *testing.T) {
 	})
 
 	t.Run("SingleTagCaseInsensitiveWithSpaces", func(t *testing.T) {
-		res, err := repo.SearchPhotosByTags([]string{"  BEACH  "}, "OR")
+		res, err := repo.SearchPhotosByTags([]string{"  BEACH  "})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -210,8 +210,8 @@ func TestSearchPhotosByTags(t *testing.T) {
 		}
 	})
 
-	t.Run("ModeORMatchesAnyTag", func(t *testing.T) {
-		res, err := repo.SearchPhotosByTags([]string{"beach", "mountain"}, "OR")
+	t.Run("MoreSelectedTagsAddsPhotosWithoutDuplicates", func(t *testing.T) {
+		res, err := repo.SearchPhotosByTags([]string{"beach", "mountain", "BEACH"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -221,25 +221,8 @@ func TestSearchPhotosByTags(t *testing.T) {
 		}
 	})
 
-	t.Run("ModeANDMatchesAllTags", func(t *testing.T) {
-		res, err := repo.SearchPhotosByTags([]string{"beach", "mountain"}, "AND")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		// Only photo3 has both "beach" and "mountain"
-		if len(res) != 1 {
-			t.Fatalf("got %d photos, want 1", len(res))
-		}
-		if res[0].ID != photo3.ID {
-			t.Errorf("photo ID = %d, want %d", res[0].ID, photo3.ID)
-		}
-		if len(res[0].Tags) != 2 {
-			t.Errorf("preloaded tags count = %d, want 2", len(res[0].Tags))
-		}
-	})
-
 	t.Run("NotFoundReturnsEmptyWithoutError", func(t *testing.T) {
-		res, err := repo.SearchPhotosByTags([]string{"nonexistent"}, "OR")
+		res, err := repo.SearchPhotosByTags([]string{"nonexistent"})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

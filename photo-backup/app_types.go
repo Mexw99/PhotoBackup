@@ -11,6 +11,7 @@ type PhotoSummary struct {
 	BackupPath   string `json:"backupPath"`
 	BackedUpAt   string `json:"backedUpAt"`
 	Thumbnail    string `json:"thumbnail"`
+	ColorTag     string `json:"colorTag"`
 }
 
 type TagCloudItem struct {
@@ -25,5 +26,11 @@ type TaggedPhotoSummary struct {
 	BackupPath   string       `json:"backupPath"`
 	BackedUpAt   string       `json:"backedUpAt"`
 	Thumbnail    string       `json:"thumbnail"`
+	ColorTag     string       `json:"colorTag"`
 	Tags         []TagSummary `json:"tags"`
+}
+
+type BackupSettings struct {
+	SourcePath string `json:"sourcePath"`
+	DestPath   string `json:"destPath"`
 }

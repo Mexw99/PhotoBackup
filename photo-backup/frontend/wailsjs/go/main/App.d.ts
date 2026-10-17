@@ -9,6 +9,8 @@ export function DeleteTag(arg1:number):Promise<void>;
 
 export function GetBackupFolder():Promise<string>;
 
+export function GetBackupSettings():Promise<main.BackupSettings>;
+
 export function GetDatabasePath():Promise<string>;
 
 export function GetDatabaseStatus():Promise<string>;
@@ -33,7 +35,11 @@ export function ListImageFiles(arg1:string):Promise<Array<backup.ImageFile>>;
 
 export function RemoveTagFromPhoto(arg1:number,arg2:number):Promise<void>;
 
-export function SearchPhotos(arg1:Array<string>,arg2:string):Promise<Array<main.TaggedPhotoSummary>>;
+export function SaveBackupSettings(arg1:string,arg2:string):Promise<void>;
+
+export function SearchPhotoLibrary(arg1:string,arg2:Array<string>):Promise<Array<main.TaggedPhotoSummary>>;
+
+export function SearchPhotos(arg1:Array<string>):Promise<Array<main.TaggedPhotoSummary>>;
 
 export function SelectDestFolder():Promise<string>;
 

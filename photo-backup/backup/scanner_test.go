@@ -40,7 +40,7 @@ func TestDiscoverImagesRejectsMissingDirectory(t *testing.T) {
 	}
 }
 
-func TestCopyFilesMovesAndRemovesSource(t *testing.T) {
+func TestCopyImagePreparesDestinationBeforeSourceRemoval(t *testing.T) {
 	srcDir := t.TempDir()
 	destDir := t.TempDir()
 
@@ -49,13 +49,9 @@ func TestCopyFilesMovesAndRemovesSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	images := []ImageFile{
-		{Name: "pic.jpg", Path: testFile, Size: 10},
-	}
-
-	summary := CopyFiles(images, destDir, nil)
-	if summary.Success != 1 {
-		t.Fatalf("expected 1 success, got %d (failed: %d)", summary.Success, summary.Failed)
+	result, err := CopyImage(ImageFile{Name: "pic.jpg", Path: testFile, Size: 10}, destDir)
+	if err != nil || !result.Success {
+		t.Fatalf("prepare destination: %+v, %v", result, err)
 	}
 
 	// 1. ตรวจสอบว่าไฟล์ปลายทางมีอยู่จริง
@@ -64,8 +60,31 @@ func TestCopyFilesMovesAndRemovesSource(t *testing.T) {
 		t.Fatalf("dest file not found: %v", err)
 	}
 
-	// 2. ตรวจสอบว่าไฟล์ต้นทางถูกลบออกแล้ว (ย้ายสำเร็จ)
-	if _, err := os.Stat(testFile); !os.IsNotExist(err) {
-		t.Fatalf("source file should have been deleted, but still exists")
+	// Service จะลบต้นทางในขั้นหลังบันทึก DB สำเร็จ
+	original, err := os.ReadFile(testFile)
+	if err != nil || string(original) != "image-data" {
+		t.Fatalf("source changed: %q, %v", original, err)
+	}
+}
+
+func TestCopyImageDoesNotOverwrite(t *testing.T) {
+	source, destination := t.TempDir(), t.TempDir()
+	path := filepath.Join(source, "same.jpg")
+	if err := os.WriteFile(path, []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, "same.jpg"), []byte("old"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := CopyImage(ImageFile{Name: "same.jpg", Path: path, Size: 3}, destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(result.BackupPath) != "same (1).jpg" {
+		t.Fatal(result.BackupPath)
+	}
+	data, err := os.ReadFile(filepath.Join(destination, "same.jpg"))
+	if err != nil || string(data) != "old" {
+		t.Fatalf("existing file changed: %q, %v", data, err)
 	}
 }

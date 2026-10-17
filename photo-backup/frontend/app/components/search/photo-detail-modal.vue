@@ -50,6 +50,11 @@
           </div>
 
           <div class="detail-row">
+            <span class="detail-label">สีหลักจากรูปภาพ:</span>
+            <span class="detail-value">{{ photo.colorTag || "ยังไม่ได้วิเคราะห์สี" }}</span>
+          </div>
+
+          <div class="detail-row">
             <span class="detail-label">ตำแหน่งไฟล์ในระบบ:</span>
             <span class="detail-value path-value">
               <code>{{ photo.backupPath }}</code>
@@ -134,6 +139,7 @@ onUnmounted(() => {
     0 20px 25px -5px rgba(0, 0, 0, 0.2),
     0 10px 10px -5px rgba(0, 0, 0, 0.08);
   max-width: 580px;
+  max-height: calc(100vh - 32px);
   width: 100%;
   overflow: hidden;
   display: flex;
@@ -213,6 +219,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
 }
 
 .modal-image-preview {

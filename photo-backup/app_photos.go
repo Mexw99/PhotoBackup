@@ -38,6 +38,7 @@ func (a *App) GetRecentPhotos(limit int) []PhotoSummary {
 			BackupPath:   photo.BackupPath,
 			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
 			Thumbnail:    service.ReadImageDataURL(photo.BackupPath),
+			ColorTag:     photo.ColorTag,
 		})
 	}
 	return result
@@ -54,11 +55,22 @@ func (a *App) GetTaggedPhotos() ([]TaggedPhotoSummary, error) {
 	return taggedPhotoSummaries(photos), nil
 }
 
-func (a *App) SearchPhotos(tagNames []string, mode string) ([]TaggedPhotoSummary, error) {
+func (a *App) SearchPhotos(tagNames []string) ([]TaggedPhotoSummary, error) {
 	if a.service == nil {
 		return nil, fmt.Errorf("database is not ready")
 	}
-	photos, err := a.service.SearchPhotos(tagNames, mode)
+	photos, err := a.service.SearchPhotos(tagNames)
+	if err != nil {
+		return nil, err
+	}
+	return taggedPhotoSummaries(photos), nil
+}
+
+func (a *App) SearchPhotoLibrary(query string, tagNames []string) ([]TaggedPhotoSummary, error) {
+	if a.service == nil {
+		return nil, fmt.Errorf("database is not ready")
+	}
+	photos, err := a.service.SearchPhotoLibrary(query, tagNames)
 	if err != nil {
 		return nil, err
 	}
@@ -79,6 +91,7 @@ func taggedPhotoSummaries(photos []model.Photo) []TaggedPhotoSummary {
 			BackupPath:   photo.BackupPath,
 			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
 			Thumbnail:    service.ReadImageDataURL(photo.BackupPath),
+			ColorTag:     photo.ColorTag,
 			Tags:         tags,
 		})
 	}

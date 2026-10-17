@@ -12,27 +12,37 @@ photo-backup/
 ├── main.go                     # เปิด DB และประกอบ Repository → Service → App
 ├── app.go                      # Wails lifecycle และสถานะฐานข้อมูล
 ├── app_backup.go               # Native dialog และส่ง progress event
-├── app_photos.go                # API รูปภาพ และแปลงผลลัพธ์เป็น DTO
+├── app_photos.go                # API ค้นหารูป และแปลงผลลัพธ์เป็น DTO
 ├── app_tags.go                  # API จัดการ Tag
 ├── app_types.go                 # DTO เดิมของ main.App สำหรับ Wails bindings
-├── model/                      # GORM schema: Photo, Tag
+├── model/                      # GORM schema: Photo, Tag, Setting, FileRecord
+│   ├── photo.go                # ข้อมูลรูป สี และเวลาแก้ไขต้นทาง
+│   ├── tag.go                  # Tag และความสัมพันธ์ many-to-many
+│   ├── setting.go              # ตาราง settings: ต้นทาง/ปลายทาง
+│   └── file_record.go          # ตาราง files: ประวัติสำรองตามแนวกลางภาค
 ├── database/                   # เปิด SQLite, migration, ปิด connection
 ├── repository/                 # GORM queries และ transaction
 │   ├── repository.go           # Store interface, constructor, context
 │   ├── photo.go
 │   ├── tag.go
 │   ├── search.go
+│   ├── settings.go
 │   └── repository_test.go
 ├── service/                    # ประสานงาน use case และกำหนด DB timeout
 │   ├── service.go
 │   ├── backup.go
 │   ├── photo.go
 │   ├── tag.go
+│   ├── settings.go
 │   └── service_test.go
 ├── backup/                     # การทำงานกับไฟล์ แยกจาก Wails และฐานข้อมูล
 │   ├── scanner.go              # ค้นหารูปภาพ
-│   ├── transfer.go             # ย้ายไฟล์และจัดการชื่อซ้ำ
+│   ├── validation.go           # ตรวจต้นทาง/ปลายทางไม่ให้ซ้อนกัน
+│   ├── transfer.go             # เตรียมไฟล์ปลายทางและจัดการชื่อซ้ำก่อนย้ายสำเร็จ
+│   ├── verify.go               # เปรียบเทียบข้อมูลไฟล์จริงก่อนลบต้นทาง
 │   └── scanner_test.go
+├── analysis/                   # วิเคราะห์ภาพพื้นฐาน แยกจาก UI และฐานข้อมูล
+│   └── color.go                # เฉลี่ย RGB และคืนชื่อ Tag สีเดียว
 ├── frontend/
 │   ├── app/
 │   │   ├── app.vue             # NuxtLayout ครอบ NuxtPage
@@ -41,7 +51,7 @@ photo-backup/
 │   │   ├── components/
 │   │   │   ├── layout/         # app-header.vue
 │   │   │   ├── gallery/        # photo-grid.vue, tag-editor.vue
-│   │   │   ├── search/         # search-bar.vue, search-filter-bar.vue, photo-detail-modal.vue
+│   │   │   ├── search/         # photo-detail-modal.vue แสดงรายละเอียดรูป
 │   │   │   └── tag-cloud/      # tag-cloud.vue
 │   │   ├── composables/        # State และการเรียก API ของแต่ละหน้า
 │   │   ├── types/              # ชนิดข้อมูลร่วมที่อ้างอิง Wails generated types
@@ -53,6 +63,7 @@ photo-backup/
 │   └── dist/                  # ผลลัพธ์ npm run generate
 ├── docs/
 │   ├── PROJECT_STRUCTURE.md
+│   ├── PROGRESS_DEMO.md        # เกณฑ์รอบนี้ วิธีสาธิต และคู่มือไล่อ่านโค้ด
 │   ├── database/              # คู่มือฐานข้อมูล HTML/CSS/JS
 │   └── planning/              # แผนแบ่งงานเดิมเพื่อใช้อ้างอิง
 ├── build/                     # ไอคอน manifest installer และ bin ที่ build ได้
@@ -63,9 +74,18 @@ photo-backup/
 
 หน้า Vue → composable → `wailsjs/go/main/App` → `app_*.go` → Service → Repository → SQLite
 
-เมื่อสำรองรูป Service เรียก `backup` เพื่อค้นหาและย้ายไฟล์ จากนั้นบันทึกผลผ่าน Repository
+เมื่อสำรองรูป Service เรียก `backup` เพื่อค้นหารูป แล้วตรวจข้อมูลสำรองเดิม
+รูปที่ต้องย้ายจะผ่าน `analysis` เพื่อวิเคราะห์สี แล้ว `backup` เตรียมไฟล์ปลายทาง
+จากนั้น Repository บันทึกรูป ประวัติ `files` และความสัมพันธ์ Tag ใน transaction เดียว
+Service จึงลบต้นทางด้วย `finishMove` เป็นขั้นสุดท้าย เมื่อย้ายสำเร็จรูปจะเหลืออยู่ที่ปลายทาง
+หากเป็นการทำต่อจากครั้งก่อน จะเทียบ bytes ผ่าน `backup.EqualFiles` ก่อนใช้ปลายทางเดิมและลบต้นทาง
+`Skipped` หมายถึงใช้ปลายทางเดิมและลบต้นทางสำเร็จแล้ว ไม่ใช่ข้ามโดยทิ้งต้นทางไว้
 ส่วน `app_backup.go` แปลง callback เป็น event `backup:progress` เพื่ออัปเดต UI
 Service จึงทดสอบได้โดยไม่ต้องเปิด Wails WebView
+
+หน้า Search ส่งชื่อไฟล์และ Tag ที่เลือกไปยัง `SearchPhotoLibrary(query, tags)`
+ค้นเฉพาะชื่อไฟล์ และแสดงรูปที่มี Tag ใด Tag หนึ่งจากหลาย Tag ที่เลือก
+ไม่มี Tag ที่เลือกจะไม่กรอง Tag; เมื่อไม่มีชื่อไฟล์ด้วยจะแสดงรูปทั้งหมด
 
 การลบ Tag ทั้งระบบใช้ `App.DeleteTag` → `Service.DeleteTag` → `Repository.DeleteTag`
 โดย Repository ลบความสัมพันธ์ใน `photo_tags` และแถวใน `tags` ภายใน transaction เดียว
@@ -84,7 +104,7 @@ Service จึงทดสอบได้โดยไม่ต้องเปิ
 - ใช้ `~/` สำหรับไฟล์ภายใน `frontend/app` และ `~~/wailsjs/` สำหรับ bridge ที่ frontend root
 - Public method ที่ให้หน้าเว็บเรียกอยู่ใน `app_*.go`; ให้ทำหน้าที่รับคำสั่งและจัดรูปผลลัพธ์
 - งานประสานหลายขั้นตอนอยู่ใน `service/`; SQL/GORM และ transaction อยู่ใน `repository/`
-- Schema อยู่ใน `model/`; งาน filesystem อยู่ใน `backup/`
+- Schema อยู่ใน `model/`; งาน filesystem อยู่ใน `backup/`; การวิเคราะห์สีอยู่ใน `analysis/`
 - งานฐานข้อมูลใน Service ใช้ context ของแอปพร้อม timeout 10 วินาทีต่อ operation
 - เมื่อแก้ public methods หรือ DTO ให้รัน `wails generate module` และตรวจ typecheck ใหม่
 
@@ -96,13 +116,18 @@ Service จึงทดสอบได้โดยไม่ต้องเปิ
 ไม่เพิ่ม controller REST, system server หรือระบบสมัครสมาชิกจากตัวอย่าง Foodie
 เพราะ PhotoBackup เรียก Go ผ่าน Wails IPC
 
-คงชื่อและ signature ของ `main.App`, JSON fields, event `backup:progress`, schema และตำแหน่ง SQLite เดิม
-ไว้ ตำแหน่งฐานข้อมูลคือ `os.UserConfigDir()/PhotoBackup/photo-backup.db`
+คง `main.App` เป็นจุดเชื่อม Wails และ event `backup:progress` พร้อมเพิ่ม API/DTO สำหรับความสามารถใหม่
+ใช้ GORM AutoMigrate เพิ่ม schema ที่ต้องใช้ในฐานข้อมูลเดิม
+ตำแหน่งฐานข้อมูลคือ `os.UserConfigDir()/PhotoBackup/photo-backup.db`
 ไม่เก็บฐานข้อมูลผู้ใช้ไว้ใน source tree
 
-**พฤติกรรมการสำรองไฟล์เดิม:** ฟังก์ชัน `CopyFiles` ย้ายไฟล์และลบต้นทางเมื่อสำเร็จ
-ตาม implementation และ test เดิม การจัดโครงสร้างครั้งนี้รักษาพฤติกรรมนี้ไว้
-ชื่อฟังก์ชันดังกล่าวยังคงเดิมเพื่อไม่เปลี่ยน API ระหว่างการ refactor
+**พฤติกรรมการสำรองปัจจุบัน:** ย้ายไฟล์ โดยลบต้นทางหลังไฟล์ปลายทางและ SQLite พร้อมแล้ว
+ทำทีละไฟล์เพื่อให้โค้ดอ่านง่าย รองรับ JPG, JPEG และ PNG
+ตาราง `settings/files` ใช้รูปแบบจากแกนงานกลางภาค แต่ไม่ได้นำเข้าฐานข้อมูลของโปรเจกต์อ้างอิงอัตโนมัติ
+
+Tag สีอัตโนมัติและ Tag ที่ผู้ใช้เพิ่มใช้ตาราง `tags/photo_tags` เดียวกัน
+ลบ Tag ที่หน้า Tag คือการลบแถวและความสัมพันธ์ ไม่ลบรูป
+การวิเคราะห์สีทำเมื่อสำรองรูปใหม่ รูปเดิมที่ถูกข้ามจะไม่ถูกวิเคราะห์หรือสร้าง Tag กลับมาใหม่
 
 ## ตรวจสอบก่อนส่งงาน
 
@@ -120,5 +145,5 @@ wails build
 ```
 
 Go tests ใช้ SQLite และรูปจำลองใน temporary directories ไม่ใช้ฐานข้อมูลหรือรูปจริงของผู้ใช้
-Service integration test ตรวจเส้นทาง Backup → บันทึก DB → เพิ่ม Tag → ค้นหา AND/OR → ลบ Tag
-พร้อมตรวจการส่ง context ลงไปถึง Repository
+ให้ตรวจเส้นทาง Backup → บันทึก DB → ลบต้นทาง → ค้นชื่อไฟล์/Tag → ลบ Tag
+รวมทั้งการลองใหม่เมื่อลบต้นทางไม่สำเร็จ และการส่ง context ลงไปถึง Repository

@@ -2,7 +2,7 @@
   <div class="tags-page">
     <header>
       <h1>จัดการ Tag</h1>
-      <p>เลือกรูปภาพแล้วเพิ่ม Tag เพื่อจัดกลุ่ม</p>
+      <p>ระบบเพิ่ม Tag สีหลักเมื่อ Backup รูปภาพ และสามารถเลือกเพิ่ม Tag เองได้</p>
     </header>
 
     <section class="panel">

@@ -11,7 +11,7 @@ import (
 
 var ErrSourceDirectoryNotFound = errors.New("source directory does not exist")
 
-// ImageFile is the file information needed by the Backup page before copying.
+// ImageFile is the file information needed by the Backup page before moving.
 // Paths are returned by the operating system, so this works on Windows and macOS.
 type ImageFile struct {
 	Name string `json:"name"`
@@ -47,7 +47,7 @@ func DiscoverImages(root string) ([]ImageFile, error) {
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() {
+		if !entry.Type().IsRegular() {
 			return nil
 		}
 

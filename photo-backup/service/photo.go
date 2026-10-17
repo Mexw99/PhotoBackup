@@ -27,10 +27,16 @@ func (s *Service) ListPhotos() ([]model.Photo, error) {
 	return store.ListPhotos()
 }
 
-func (s *Service) SearchPhotos(tags []string, mode string) ([]model.Photo, error) {
+func (s *Service) SearchPhotos(tags []string) ([]model.Photo, error) {
 	store, cancel := s.operation()
 	defer cancel()
-	return store.SearchPhotosByTags(tags, mode)
+	return store.SearchPhotosByTags(tags)
+}
+
+func (s *Service) SearchPhotoLibrary(query string, tags []string) ([]model.Photo, error) {
+	store, cancel := s.operation()
+	defer cancel()
+	return store.SearchPhotos(query, tags)
 }
 
 // ReadImageDataURL returns an empty preview when the image is unavailable.

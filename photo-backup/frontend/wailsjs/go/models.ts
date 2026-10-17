@@ -6,6 +6,7 @@ export namespace backup {
 	    backupPath: string;
 	    fileSize: number;
 	    success: boolean;
+	    skipped: boolean;
 	    error: string;
 	
 	    static createFrom(source: any = {}) {
@@ -19,12 +20,14 @@ export namespace backup {
 	        this.backupPath = source["backupPath"];
 	        this.fileSize = source["fileSize"];
 	        this.success = source["success"];
+	        this.skipped = source["skipped"];
 	        this.error = source["error"];
 	    }
 	}
 	export class BackupSummary {
 	    total: number;
 	    success: number;
+	    skipped: number;
 	    failed: number;
 	    results: BackupResult[];
 	
@@ -36,6 +39,7 @@ export namespace backup {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.total = source["total"];
 	        this.success = source["success"];
+	        this.skipped = source["skipped"];
 	        this.failed = source["failed"];
 	        this.results = this.convertValues(source["results"], BackupResult);
 	    }
@@ -79,12 +83,27 @@ export namespace backup {
 
 export namespace main {
 	
+	export class BackupSettings {
+	    sourcePath: string;
+	    destPath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BackupSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sourcePath = source["sourcePath"];
+	        this.destPath = source["destPath"];
+	    }
+	}
 	export class PhotoSummary {
 	    id: number;
 	    originalName: string;
 	    backupPath: string;
 	    backedUpAt: string;
 	    thumbnail: string;
+	    colorTag: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PhotoSummary(source);
@@ -97,6 +116,7 @@ export namespace main {
 	        this.backupPath = source["backupPath"];
 	        this.backedUpAt = source["backedUpAt"];
 	        this.thumbnail = source["thumbnail"];
+	        this.colorTag = source["colorTag"];
 	    }
 	}
 	export class TagCloudItem {
@@ -135,6 +155,7 @@ export namespace main {
 	    backupPath: string;
 	    backedUpAt: string;
 	    thumbnail: string;
+	    colorTag: string;
 	    tags: TagSummary[];
 	
 	    static createFrom(source: any = {}) {
@@ -148,6 +169,7 @@ export namespace main {
 	        this.backupPath = source["backupPath"];
 	        this.backedUpAt = source["backedUpAt"];
 	        this.thumbnail = source["thumbnail"];
+	        this.colorTag = source["colorTag"];
 	        this.tags = this.convertValues(source["tags"], TagSummary);
 	    }
 	
