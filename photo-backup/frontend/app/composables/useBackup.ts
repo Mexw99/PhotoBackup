@@ -1,4 +1,4 @@
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import {
   GetBackupSettings,
   SaveBackupSettings,
@@ -6,38 +6,15 @@ import {
   SelectSourceFolder,
   SelectDestFolder,
   StartBackup,
+  GetAIQueueStatus,
+  GetAIProviderStatus,
 } from "~~/wailsjs/go/main/App";
 import { EventsOn } from "~~/wailsjs/runtime/runtime";
-import type { ImageFile, BackupSummary, BackupProgress } from "~/types/backup";
+import type { ImageFile, BackupSummary, BackupProgress, AIQueueStatus, AIProviderStatus } from "~/types/backup";
 
 export function useBackup() {
-  const sourcePath = ref("");
-  const destPath = ref("");
-  const imageFiles = ref<ImageFile[]>([]);
-  const loading = ref(false);
-  const errorMessage = ref("");
-  const settingsMessage = ref("");
-  const settingsSaving = ref(false);
-  const backupRunning = ref(false);
-  const backupDone = ref(false);
-  const progressCurrent = ref(0);
-  const progressTotal = ref(0);
-  const progressName = ref("");
-  const backupSummary = ref<BackupSummary>({
-    total: 0,
-    success: 0,
-    skipped: 0,
-    failed: 0,
-    results: [],
-  });
+  ensureProgressListener();
 
-  let stopProgress: (() => void) | undefined;
-  onUnmounted(() => stopProgress?.());
-
-  const progressPercent = computed(() => {
-    if (progressTotal.value === 0) return 0;
-    return Math.round((progressCurrent.value / progressTotal.value) * 100);
-  });
   const successResults = computed(() =>
     backupSummary.value.results.filter(
       (result) => result.success && !result.skipped,
@@ -71,6 +48,8 @@ export function useBackup() {
     loading.value = true;
 
     try {
+      await refreshAIQueueStatus();
+      await refreshAIProviderStatus();
       const settings = await GetBackupSettings();
       sourcePath.value = settings.sourcePath;
       destPath.value = settings.destPath;
@@ -81,6 +60,24 @@ export function useBackup() {
       loading.value = false;
     }
   });
+
+  async function refreshAIQueueStatus() {
+    try {
+      const status = await GetAIQueueStatus();
+      if (status) updateAIQueueStatus(status);
+    } catch {
+      // Queue status is supplementary; it must not block Backup UI.
+    }
+  }
+
+  async function refreshAIProviderStatus() {
+    try {
+      const status = await GetAIProviderStatus();
+      if (status) aiProviderStatus.value = status;
+    } catch {
+      // Provider status is supplementary; it must not block Backup UI.
+    }
+  }
 
   async function chooseSourceFolder() {
     errorMessage.value = "";
@@ -152,16 +149,13 @@ export function useBackup() {
 
     resetBackupState();
     backupRunning.value = true;
+    backupStartedAt.value = Date.now();
+    elapsedMs.value = 0;
+    progressTotal.value = imageFiles.value.length;
+    startElapsedTimer();
 
     try {
       if (!(await saveSettings())) return;
-
-      stopProgress?.();
-      stopProgress = EventsOn("backup:progress", (data: BackupProgress) => {
-        progressCurrent.value = data.current;
-        progressTotal.value = data.total;
-        progressName.value = data.name;
-      });
 
       const result = await StartBackup(sourcePath.value, destPath.value);
       backupSummary.value = result;
@@ -174,8 +168,7 @@ export function useBackup() {
       errorMessage.value = String(error || "Backup ล้มเหลว");
     } finally {
       backupRunning.value = false;
-      stopProgress?.();
-      stopProgress = undefined;
+      stopElapsedTimer();
     }
   }
 
@@ -184,6 +177,8 @@ export function useBackup() {
     progressCurrent.value = 0;
     progressTotal.value = 0;
     progressName.value = "";
+    backupStartedAt.value = null;
+    elapsedMs.value = 0;
     backupSummary.value = {
       total: 0,
       success: 0,
@@ -214,9 +209,16 @@ export function useBackup() {
     progressName,
     backupSummary,
     progressPercent,
+    elapsedMs,
+    elapsedLabel,
+    aiElapsedLabel,
     successResults,
     skippedResults,
     failedResults,
+    aiQueueStatus,
+    aiProviderStatus,
+    refreshAIQueueStatus,
+    refreshAIProviderStatus,
     readSourceFiles,
     chooseSourceFolder,
     clearSourceFolder,
@@ -227,4 +229,136 @@ export function useBackup() {
     resetBackupState,
     formatBytes,
   };
+}
+
+export function useBackupStatus() {
+  ensureProgressListener();
+  return {
+    backupRunning,
+    backupDone,
+    progressCurrent,
+    progressTotal,
+    progressName,
+    progressPercent,
+    elapsedLabel,
+    aiElapsedLabel,
+  };
+}
+
+// State อยู่ระดับ module จึงไม่ถูกสร้างใหม่เมื่อเปลี่ยนหน้า
+const sourcePath = ref("");
+const destPath = ref("");
+const imageFiles = ref<ImageFile[]>([]);
+const loading = ref(false);
+const errorMessage = ref("");
+const settingsMessage = ref("");
+const settingsSaving = ref(false);
+const backupRunning = ref(false);
+const backupDone = ref(false);
+const progressCurrent = ref(0);
+const progressTotal = ref(0);
+const progressName = ref("");
+const backupStartedAt = ref<number | null>(null);
+const elapsedMs = ref(0);
+const progressPercent = computed(() => {
+  if (progressTotal.value === 0) return 0;
+  return Math.round((progressCurrent.value / progressTotal.value) * 100);
+});
+const elapsedLabel = computed(() => formatElapsed(elapsedMs.value));
+const backupSummary = ref<BackupSummary>({
+  total: 0,
+  success: 0,
+  skipped: 0,
+  failed: 0,
+  results: [],
+});
+const aiQueueStatus = ref<AIQueueStatus>({
+  queued: 0,
+  processing: 0,
+  completed: 0,
+  failed: 0,
+  retryWait: 0,
+});
+const aiProviderStatus = ref<AIProviderStatus>({
+  provider: "",
+  model: "",
+  state: "disabled",
+  message: "ยังไม่ได้ตั้งค่า AI",
+});
+const aiStartedAt = ref<number | null>(null);
+const aiElapsedMs = ref(0);
+const aiElapsedLabel = computed(() => formatElapsed(aiElapsedMs.value));
+let aiWasActive = false;
+let aiElapsedTimer: ReturnType<typeof setInterval> | undefined;
+
+let progressListenerReady = false;
+let elapsedTimer: ReturnType<typeof setInterval> | undefined;
+
+function ensureProgressListener() {
+  if (progressListenerReady) return;
+  progressListenerReady = true;
+  EventsOn("backup:progress", (data: BackupProgress) => {
+    progressCurrent.value = data.current;
+    progressTotal.value = data.total;
+    progressName.value = data.name;
+  });
+  EventsOn("ai:progress", (data: AIQueueStatus) => {
+    if (data) updateAIQueueStatus(data);
+  });
+}
+
+function updateAIQueueStatus(status: AIQueueStatus) {
+  aiQueueStatus.value = status;
+  const active = status.queued > 0 || status.processing > 0 || status.retryWait > 0;
+  if (active && !aiWasActive) {
+    aiStartedAt.value = Date.now();
+    aiElapsedMs.value = 0;
+    startAIElapsedTimer();
+  }
+  if (!active && aiWasActive) {
+    stopAIElapsedTimer();
+  }
+  aiWasActive = active;
+}
+
+function startAIElapsedTimer() {
+  if (aiElapsedTimer) clearInterval(aiElapsedTimer);
+  aiElapsedTimer = setInterval(() => {
+    if (aiStartedAt.value !== null && aiWasActive) {
+      aiElapsedMs.value = Date.now() - aiStartedAt.value;
+    }
+  }, 1000);
+}
+
+function stopAIElapsedTimer() {
+  if (aiElapsedTimer) clearInterval(aiElapsedTimer);
+  aiElapsedTimer = undefined;
+  if (aiStartedAt.value !== null) {
+    aiElapsedMs.value = Date.now() - aiStartedAt.value;
+  }
+}
+
+function startElapsedTimer() {
+  if (elapsedTimer) clearInterval(elapsedTimer);
+  elapsedTimer = setInterval(() => {
+    if (backupStartedAt.value !== null && backupRunning.value) {
+      elapsedMs.value = Date.now() - backupStartedAt.value;
+    }
+  }, 1000);
+}
+
+function stopElapsedTimer() {
+  if (elapsedTimer) clearInterval(elapsedTimer);
+  elapsedTimer = undefined;
+  if (backupStartedAt.value !== null) {
+    elapsedMs.value = Date.now() - backupStartedAt.value;
+  }
+}
+
+function formatElapsed(milliseconds: number) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return [hours, minutes, seconds].map((value) => String(value).padStart(2, "0")).join(":");
 }

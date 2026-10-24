@@ -173,6 +173,127 @@ func TestSaveBackupRepairsExistingPathAndKeepsUserEdits(t *testing.T) {
 	}
 }
 
+func TestSaveBackupDuplicateDoesNotClearAIDescriptionHashOrTags(t *testing.T) {
+	db, err := database.OpenAt(filepath.Join(t.TempDir(), "duplicate-ai.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repo := repository.New(db.GORM())
+	hash := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	photo := model.Photo{OriginalName: "same.jpg", OriginalPath: "source/same.jpg", BackupPath: "backup/same.jpg", FileSize: 10, BackedUpAt: time.Now(), ContentHash: &hash}
+	if err := repo.SaveBackup(&photo); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveAIAnalysis(photo.ID, "AI description", []string{"ai: beach"}); err != nil {
+		t.Fatal(err)
+	}
+	duplicate := model.Photo{OriginalName: photo.OriginalName, OriginalPath: photo.OriginalPath, BackupPath: photo.BackupPath, FileSize: 10, BackedUpAt: time.Now()}
+	if err := repo.SaveBackup(&duplicate); err != nil {
+		t.Fatal(err)
+	}
+	var loaded model.Photo
+	if err := db.GORM().Preload("Tags").First(&loaded, photo.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Description != "AI description" || loaded.ContentHash == nil || *loaded.ContentHash != hash {
+		t.Fatalf("duplicate backup cleared AI data: %+v", loaded)
+	}
+	if len(loaded.Tags) != 1 || loaded.Tags[0].Name != "ai: beach" {
+		t.Fatalf("duplicate backup cleared AI tag: %+v", loaded.Tags)
+	}
+}
+
+func TestContentHashChangeRemovesOnlyAITags(t *testing.T) {
+	db, err := database.OpenAt(filepath.Join(t.TempDir(), "changed-hash.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repo := repository.New(db.GORM())
+	hashA := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	photo := model.Photo{OriginalName: "same.jpg", OriginalPath: "source/same.jpg", BackupPath: "backup/same.jpg", FileSize: 10, BackedUpAt: time.Now(), ColorTag: "สีแดง", ContentHash: &hashA}
+	if err := repo.SaveBackup(&photo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AddTagToPhotos([]uint{photo.ID}, "family"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveAIAnalysis(photo.ID, "old AI", []string{"old ai"}); err != nil {
+		t.Fatal(err)
+	}
+	hashB := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	changed := model.Photo{OriginalName: photo.OriginalName, OriginalPath: photo.OriginalPath, BackupPath: photo.BackupPath, FileSize: 11, BackedUpAt: time.Now(), ContentHash: &hashB}
+	if err := repo.SaveBackup(&changed); err != nil {
+		t.Fatal(err)
+	}
+	var links []model.PhotoTag
+	if err := db.GORM().Where("photo_id = ?", photo.ID).Find(&links).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, link := range links {
+		if link.Source == "ai" {
+			t.Fatalf("old AI tag remains: %+v", links)
+		}
+	}
+	var loaded model.Photo
+	if err := db.GORM().First(&loaded, photo.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Description != "" || loaded.ContentHash == nil || *loaded.ContentHash != hashB || loaded.ColorTag != "สีแดง" {
+		t.Fatalf("changed hash metadata: %+v", loaded)
+	}
+	seen := map[string]string{}
+	for _, link := range links {
+		var tag model.Tag
+		if err := db.GORM().First(&tag, link.TagID).Error; err != nil {
+			t.Fatal(err)
+		}
+		seen[tag.Name] = link.Source
+	}
+	if seen["สีแดง"] != "color" || seen["family"] != "user" || seen["old ai"] != "" {
+		var raw []struct {
+			PhotoID uint
+			TagID   uint
+			Source  string
+		}
+		_ = db.GORM().Raw("SELECT photo_id, tag_id, source FROM photo_tags").Scan(&raw).Error
+		t.Fatalf("changed hash removed or changed non-AI tags: seen=%+v raw=%+v", seen, raw)
+	}
+}
+
+func TestSameNameUserTagSurvivesAIConflictAndContentHashChange(t *testing.T) {
+	db, err := database.OpenAt(filepath.Join(t.TempDir(), "same-tag-source.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	repo := repository.New(db.GORM())
+	hashA := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	photo := model.Photo{OriginalName: "same.jpg", OriginalPath: "source/same.jpg", BackupPath: "backup/same.jpg", BackedUpAt: time.Now(), ContentHash: &hashA}
+	if err := repo.SaveBackup(&photo); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.AddTagToPhotos([]uint{photo.ID}, "shared"); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveAIAnalysis(photo.ID, "AI uses the same name", []string{"shared"}); err != nil {
+		t.Fatal(err)
+	}
+	hashB := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	changed := model.Photo{OriginalName: photo.OriginalName, OriginalPath: photo.OriginalPath, BackupPath: photo.BackupPath, BackedUpAt: time.Now(), ContentHash: &hashB}
+	if err := repo.SaveBackup(&changed); err != nil {
+		t.Fatal(err)
+	}
+	var links []model.PhotoTag
+	if err := db.GORM().Joins("JOIN tags ON tags.id = photo_tags.tag_id").Where("photo_tags.photo_id = ? AND tags.name = ?", photo.ID, "shared").Find(&links).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(links) != 1 || links[0].Source != "user" {
+		t.Fatalf("same-name user tag was removed or changed source: %+v", links)
+	}
+}
+
 func TestSettingsUpdateOneRowAndFilenameSearch(t *testing.T) {
 	repo := newTestRepository(t)
 	setting, err := repo.GetSettings()

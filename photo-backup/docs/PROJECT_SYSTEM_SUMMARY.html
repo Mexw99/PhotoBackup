@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PhotoBackup — สรุประบบและ Flow การทำงาน</title>
+  <style>
+    :root{--ink:#172033;--muted:#64748b;--line:#dbe3ee;--blue:#2563eb;--blue-bg:#eff6ff;--green:#15803d;--green-bg:#f0fdf4;--orange:#b45309;--orange-bg:#fff7ed;--red:#b91c1c;--red-bg:#fef2f2;--paper:#fff;--bg:#f5f7fb}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 "Segoe UI",Tahoma,Arial,sans-serif}
+    .shell{display:grid;grid-template-columns:285px minmax(0,1fr);min-height:100vh}.side{position:sticky;top:0;height:100vh;overflow:auto;background:#0f172a;color:#dbeafe;padding:24px 18px}.side h1{font-size:22px;margin:0 0 4px;color:#fff}.side p{margin:0 0 20px;color:#94a3b8;font-size:12px}.side a{display:block;color:#cbd5e1;text-decoration:none;padding:7px 9px;border-radius:7px}.side a:hover{background:#1e293b;color:#fff}.side .group{margin-top:20px;color:#60a5fa;font-size:12px;font-weight:700;text-transform:uppercase}.main{max-width:1250px;width:100%;padding:38px 48px 80px;margin:auto}.hero{background:var(--paper);border:1px solid var(--line);border-left:5px solid var(--blue);padding:28px 30px;border-radius:12px}.hero h2{font-size:32px;line-height:1.25;margin:0 0 8px}.hero p{color:var(--muted);margin:5px 0}.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.badge{border-radius:999px;padding:4px 11px;background:var(--blue-bg);color:#1d4ed8;font-size:13px}.badge.ok{background:var(--green-bg);color:var(--green)}.badge.warn{background:var(--orange-bg);color:var(--orange)}
+    section{scroll-margin-top:20px;margin-top:28px}.section-title{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding-bottom:8px}.section-title h2{font-size:24px;margin:0}.section-title small{color:var(--muted)}.panel{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:20px;margin:14px 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:17px}.card h3{margin:0 0 6px;font-size:17px;color:#1e40af}.card p{margin:5px 0}.muted{color:var(--muted)}.ok{color:var(--green)}.warn{color:var(--orange)}.danger{color:var(--red)}
+    code,kbd{font-family:Consolas,"Courier New",monospace;font-size:.9em;background:#eef2f7;border-radius:4px;padding:1px 5px;color:#334155}pre{background:#0b1220;color:#dbeafe;overflow:auto;padding:16px;border-radius:8px;line-height:1.55}pre code{background:none;color:inherit;padding:0}.flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:12px 0}.flow span{background:var(--blue-bg);border:1px solid #bfdbfe;color:#1e40af;border-radius:8px;padding:10px 13px}.flow i{align-self:center;color:#94a3b8;font-style:normal;font-size:20px}.file{color:#0f766e;font-family:Consolas,monospace}.note{border-left:4px solid #93c5fd;background:var(--blue-bg);padding:12px 15px;border-radius:5px}.warnbox{border-left:4px solid #fb923c;background:var(--orange-bg);padding:12px 15px;border-radius:5px}table{border-collapse:collapse;width:100%;background:var(--paper)}th,td{border:1px solid var(--line);padding:9px 10px;vertical-align:top;text-align:left}th{background:#eef4fb;color:#1e3a8a}.search{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:14px 0;font:inherit}.hide{display:none!important}.small{font-size:13px}.toc-note{font-size:13px;color:#94a3b8;margin-top:30px}
+    @media(max-width:900px){.shell{display:block}.side{position:relative;height:auto}.main{padding:24px 16px}.grid{grid-template-columns:1fr}.hero h2{font-size:26px}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <h1>PhotoBackup</h1><p>System Summary & Technical Guide</p>
+    <input id="filter" class="search" placeholder="ค้นหาในเอกสาร..." aria-label="ค้นหาในเอกสาร">
+    <div class="group">ภาพรวม</div>
+    <a href="#overview">1. ภาพรวม</a><a href="#startup">2. เปิดโปรแกรม</a><a href="#frontend">3. Frontend</a>
+    <div class="group">หน้าจอ</div>
+    <a href="#dashboard">4. Dashboard</a><a href="#backup">5. Backup</a><a href="#tags">6. Tags</a><a href="#search">7. Search</a>
+    <div class="group">Backend</div>
+    <a href="#layers">8. ชั้นระบบ</a><a href="#database">9. Database</a><a href="#backup-flow">10. Backup Flow</a><a href="#ai">11. AI Pipeline</a>
+    <div class="group">ส่งงาน</div>
+    <a href="#portable">12. Portable AI</a><a href="#tests">13. Tests</a><a href="#demo">14. Demo Guide</a><a href="#limitations">15. ข้อจำกัด</a>
+    <p class="toc-note">เอกสารนี้อ้างอิงจากโค้ดในโฟลเดอร์ photo-backup ณ วันที่สร้างไฟล์</p>
+  </aside>
+  <main class="main">
+    <header class="hero">
+      <h2>PhotoBackup: สรุประบบตั้งแต่หน้าแรกถึง Backend</h2>
+      <p>โปรแกรม Wails + Nuxt สำหรับสำรองรูปจาก Flash Drive, เก็บข้อมูลใน SQLite/GORM, สร้าง Tag ด้วย Local YOLO และรองรับ Description จาก Ollama แบบ Optional</p>
+      <div class="badges"><span class="badge ok">Backup + Verify</span><span class="badge ok">SQLite + GORM</span><span class="badge ok">Tag Search + Tag Cloud</span><span class="badge ok">Portable YOLO Windows</span><span class="badge warn">Ollama เป็น Optional</span></div>
+    </header>
+
+    <section id="overview"><div class="section-title"><h2>1. ภาพรวมแนวคิดของระบบ</h2><small>What the program solves</small></div>
+      <div class="panel"><p>ผู้ใช้เลือกโฟลเดอร์ต้นทาง เช่น Flash Drive และเลือกโฟลเดอร์ปลายทาง จากนั้นระบบค้นหารูปภาพ, คัดลอกไปปลายทาง, ตรวจสอบว่าสำเนาตรงกับต้นฉบับ, บันทึกประวัติลง SQLite และสร้างงานวิเคราะห์ AI แบบแยกจาก Backup</p>
+      <div class="flow"><span>เลือก Source</span><i>→</i><span>ค้นหา JPG/PNG</span><i>→</i><span>Copy</span><i>→</i><span>Verify</span><i>→</i><span>Save DB</span><i>→</i><span>สร้าง Tag Job</span><i>→</i><span>Search/Tag Cloud</span></div></div>
+      <div class="grid"><div class="card"><h3>จุดสำคัญด้านข้อมูล</h3><p>ระบบไม่ลบต้นฉบับก่อน Copy, Verify และบันทึกข้อมูลสำเร็จ การ Backup ซ้ำใช้การตรวจประวัติและไม่เขียนทับไฟล์เดิม</p></div><div class="card"><h3>จุดสำคัญด้าน AI</h3><p>AI อ่านไฟล์ปลายทางที่ตรวจสอบแล้ว ไม่อ่านต้นฉบับโดยตรง และใช้ Content Hash เพื่อใช้ผลเดิมซ้ำโดยไม่วิเคราะห์ซ้ำ</p></div></div>
+    </section>
+
+    <section id="startup"><div class="section-title"><h2>2. ตอนเปิดโปรแกรม</h2><small>main.go → App → Service</small></div>
+      <div class="panel"><div class="flow"><span><b class="file">main.go</b><br>ฝัง frontend/dist</span><i>→</i><span><b class="file">database.OpenDefault()</b><br>เปิด SQLite + Migration</span><i>→</i><span><b class="file">repository.New()</b><br>สร้าง Repository</span><i>→</i><span><b class="file">service.New()</b><br>สร้าง Business Layer</span><i>→</i><span><b class="file">wails.Run()</b><br>เปิด Window</span></div>
+      <p><b class="file">main.go</b> ใช้ <code>//go:embed all:frontend/dist</code> เพื่อฝังหน้า Nuxt เข้าแอป Wails ส่วน <b class="file">app.go</b> เป็น Presentation Layer ที่ถูก Bind ให้ Frontend เรียกได้</p>
+      <p>เมื่อ Wails เรียก <code>OnStartup</code> ใน <b class="file">App.startup()</b> ระบบส่ง Context ให้ Service และเชื่อม callback ความคืบหน้า AI ไปยัง Event <code>ai:progress</code></p></div>
+    </section>
+
+    <section id="frontend"><div class="section-title"><h2>3. โครงสร้าง Frontend</h2><small>Nuxt/Vue</small></div>
+      <div class="grid"><div class="card"><h3><span class="file">frontend/app/app.vue</span></h3><p>เป็น Root Component ที่วาง <code>&lt;NuxtLayout&gt;</code> และ <code>&lt;NuxtPage&gt;</code> ทำให้ทุกหน้าถูกแสดงใน Layout เดียวกัน</p></div><div class="card"><h3><span class="file">frontend/app/layouts/default.vue</span></h3><p>กำหนดโครงหน้าโดยรวมและพื้นที่แสดงหน้าแต่ละ Route</p></div><div class="card"><h3><span class="file">frontend/app/components/layout/app-header.vue</span></h3><p>แสดง Brand, เมนู Dashboard/Backup/Tag/Search และสถานะ Backup แบบ Global โดยอ่านจาก <span class="file">useBackupStatus()</span></p></div><div class="card"><h3><span class="file">frontend/app/composables/</span></h3><p>เป็นตัวกลางระหว่าง Vue กับ Wails Binding เช่น <span class="file">useDashboard.ts</span>, <span class="file">useBackup.ts</span>, <span class="file">usePhotoTags.ts</span> และ <span class="file">usePhotoSearch.ts</span></p></div></div>
+      <div class="note">ไฟล์ <span class="file">frontend/wailsjs/</span> เป็น Binding ที่ Wails สร้างจาก Go ไม่ควรเขียน Business Logic ลงในไฟล์นี้ เพราะอาจถูก Generate ทับ</div>
+    </section>
+
+    <section id="dashboard"><div class="section-title"><h2>4. หน้า Dashboard</h2><small>หน้าแรก: <span class="file">frontend/app/pages/index.vue</span></small></div>
+      <div class="panel"><p>Dashboard แสดงภาพรวมระบบ ได้แก่ สถานะ Database, จำนวนรูป, จำนวน Tag, รูปล่าสุด, Tag ที่มีอยู่ และตำแหน่งไฟล์ Database</p><div class="flow"><span><span class="file">useDashboard()</span></span><i>→</i><span><span class="file">GetDatabaseStatus()</span><br><span class="file">GetDatabasePath()</span></span><i>→</i><span><span class="file">App</span></span><i>→</i><span><span class="file">Service/Repository</span></span><i>→</i><span>SQLite</span></div><p>รายการรูปใช้ <span class="file">GetRecentPhotos()</span> และรายการ Tag ใช้ <span class="file">GetTags()</span> โดย Backend แปลงข้อมูลเป็น DTO ใน <span class="file">app_photos.go</span> และ <span class="file">app_tags.go</span></p></div>
+    </section>
+
+    <section id="backup"><div class="section-title"><h2>5. หน้า Backup</h2><small><span class="file">frontend/app/pages/backup.vue</span></small></div>
+      <div class="panel"><p>หน้านี้ให้เลือก Source/Destination, อ่านรายชื่อรูป, เริ่ม Backup, แสดง Progress, สรุป Success/Skipped/Failed และแสดงสถานะ AI Queue</p><div class="grid"><div class="card"><h3>Frontend Function</h3><p><span class="file">useBackup.startBackup()</span> เรียก <span class="file">SaveBackupSettings()</span> แล้วเรียก <span class="file">StartBackup()</span> เมื่อรับ Event <code>backup:progress</code> จะอัปเดตจำนวนไฟล์ ชื่อไฟล์ และเวลา</p></div><div class="card"><h3>Wails Function</h3><p><span class="file">app_backup.go: App.StartBackup()</span> เรียก Service และส่ง callback ไปยัง <code>runtime.EventsEmit(ctx, "backup:progress", ...)</code></p></div></div></div>
+      <h3>ปุ่มและ Flow ย่อย</h3><table><thead><tr><th>การทำงาน</th><th>Frontend</th><th>Backend</th></tr></thead><tbody><tr><td>เลือกต้นทาง</td><td><span class="file">chooseSourceFolder()</span></td><td><span class="file">SelectSourceFolder()</span> เปิด Native Directory Dialog</td></tr><tr><td>อ่านรูป</td><td><span class="file">readSourceFiles()</span></td><td><span class="file">ListImageFiles()</span> → <span class="file">backup.DiscoverImages()</span></td></tr><tr><td>เริ่ม Backup</td><td><span class="file">startBackup()</span></td><td><span class="file">service.StartBackup()</span></td></tr><tr><td>ดู AI Status</td><td><span class="file">GetAIQueueStatus()</span>, <span class="file">GetAIProviderStatus()</span></td><td><span class="file">service.GetAIQueueStatus()</span>, <span class="file">GetAIProviderStatus()</span></td></tr></tbody></table>
+    </section>
+
+    <section id="tags"><div class="section-title"><h2>6. หน้าจัดการ Tag</h2><small><span class="file">frontend/app/pages/tags.vue</span></small></div>
+      <div class="panel"><p>ผู้ใช้เลือกหลายรูปจาก <span class="file">PhotoGrid</span> แล้วเพิ่ม Tag เอง, ลบ Tag ออกจากรูป หรือ ลบ Tag จากระบบทั้งหมดได้ Tag Cloud แสดงจำนวนรูปต่อ Tag</p><div class="flow"><span>เลือก Photo</span><i>→</i><span><span class="file">AddTagToPhotos(ids,name)</span></span><i>→</i><span><span class="file">service.AddTagToPhotos()</span></span><i>→</i><span><span class="file">repository.AddTagToPhotos()</span></span><i>→</i><span><code>photo_tags.source=user</code></span></div><p>ความสัมพันธ์ Tag เก็บในตาราง <code>photo_tags</code> และแยก Source เป็น <code>user</code>, <code>ai</code> หรือ <code>color</code> เพื่อไม่ให้การเปลี่ยน ContentHash ลบ Tag ผู้ใช้</p></div>
+    </section>
+
+    <section id="search"><div class="section-title"><h2>7. หน้าค้นหา</h2><small><span class="file">frontend/app/pages/search.vue</span></small></div>
+      <div class="panel"><p>ค้นหาได้ 2 ทางพร้อมกัน: พิมพ์ชื่อไฟล์/Description และเลือกหลาย Tag จาก Tag Cloud การพิมพ์จะถูกส่งไปค้นหาเมื่อกดปุ่มหรือเลือก Tag</p><div class="flow"><span>พิมพ์คำค้น/เลือก Tag</span><i>→</i><span><span class="file">usePhotoSearch.executeSearch()</span></span><i>→</i><span><span class="file">SearchPhotoLibrary(query,tags)</span></span><i>→</i><span><span class="file">repository.SearchPhotos()</span></span><i>→</i><span>SQLite</span><i>→</i><span>Photo Grid + Modal</span></div><h3>Query จริง</h3><pre><code>LOWER(original_name) LIKE ? OR LOWER(description) LIKE ?</code></pre><p>Tag จะถูก <code>TrimSpace</code>, แปลงเป็นตัวพิมพ์เล็ก และตัดซ้ำก่อนสร้าง Subquery จาก <code>photo_tags JOIN tags</code> เพื่อหา Photo ที่มี Tag ตามที่เลือก</p><p>ผลลัพธ์ถูกแสดงเป็นหลายรูปใน Grid และกดรูปเพื่อเปิด <span class="file">photo-detail-modal.vue</span> ซึ่งแสดง Thumbnail, ชื่อไฟล์, path, วันที่, Description และ Tag</p></div>
+    </section>
+
+    <section id="layers"><div class="section-title"><h2>8. ชั้นระบบ Backend</h2><small>การแบ่งหน้าที่</small></div>
+      <table><thead><tr><th>ชั้น</th><th>โฟลเดอร์/ไฟล์</th><th>หน้าที่</th></tr></thead><tbody><tr><td>Wails App</td><td><span class="file">main.go, app.go, app_backup.go, app_photos.go, app_tags.go</span></td><td>รับคำสั่งจาก Frontend, เปิด Dialog, Emit Event และแปลงข้อมูลเป็น DTO</td></tr><tr><td>Service</td><td><span class="file">service/</span></td><td>Business Logic เช่น Backup orchestration, AI Queue, Settings, Search และ Tags</td></tr><tr><td>Repository</td><td><span class="file">repository/</span></td><td>ติดต่อ GORM/SQLite, Query, Transaction, Save และ Load Model</td></tr><tr><td>Model</td><td><span class="file">model/</span></td><td>โครงสร้างตารางและความสัมพันธ์ของข้อมูล</td></tr><tr><td>Backup</td><td><span class="file">backup/</span></td><td>ค้นหาไฟล์, Copy, Verify และ Validate รูป</td></tr><tr><td>Analysis</td><td><span class="file">analysis/</span></td><td>Hash, AI Provider, YOLO, Ollama, Parse Result และ Health Check</td></tr><tr><td>Database</td><td><span class="file">database/database.go</span></td><td>เปิด SQLite, ตั้ง WAL/busy_timeout, AutoMigrate และ Migration ตารางเก่า</td></tr></tbody></table>
+    </section>
+
+    <section id="database"><div class="section-title"><h2>9. Database และ Model</h2><small>SQLite + GORM</small></div>
+      <div class="panel"><p><span class="file">database.OpenDefault()</span> ใช้ Working Directory สร้าง <code>photo-backup.db</code> และ <span class="file">database.OpenAt()</span> เปิดผ่าน <code>glebarez/sqlite</code> จากนั้นจำกัด Pool เป็น Connection เดียวและตั้ง <code>PRAGMA busy_timeout</code> กับ <code>journal_mode=WAL</code> ก่อน AutoMigrate</p></div>
+      <table><thead><tr><th>Model</th><th>ตาราง</th><th>ข้อมูลสำคัญ</th></tr></thead><tbody><tr><td><span class="file">model.Photo</span></td><td><code>photos</code></td><td>ชื่อ/Path ต้นทาง, BackupPath, FileSize, ContentHash, Description, ColorTag, วันที่ และ Tags</td></tr><tr><td><span class="file">model.Tag</span></td><td><code>tags</code></td><td>ชื่อ Tag ไม่ซ้ำและความสัมพันธ์ Photos</td></tr><tr><td><span class="file">model.PhotoTag</span></td><td><code>photo_tags</code></td><td>PhotoID + TagID + Source เป็น Primary Key แบบสามคอลัมน์</td></tr><tr><td><span class="file">model.FileRecord</span></td><td><code>files</code></td><td>ประวัติการ Backup เดิมจากงานกลางภาค</td></tr><tr><td><span class="file">model.Setting</span></td><td><code>settings</code></td><td>Source และ Destination ที่เลือกไว้</td></tr><tr><td><span class="file">model.AIResult</span></td><td><code>ai_results</code></td><td>Cache ตาม ContentHash + AnalysisProfile + PromptVersion</td></tr><tr><td><span class="file">model.AIJob</span></td><td><code>ai_jobs</code></td><td>คิว queued/processing/completed/failed/retry_wait</td></tr><tr><td><span class="file">model.AIUsage</span></td><td><code>ai_usages</code></td><td>นับการใช้ Provider ต่อวัน กรณีตั้ง Daily Limit</td></tr></tbody></table>
+      <div class="note"><b>Migration เดิม:</b> <span class="file">database.go:migratePhotoTagPrimaryKey()</span> ย้าย Join Table เก่าไปสร้างใหม่ที่รองรับ Source และจัดประเภทความสัมพันธ์เดิมเป็น <code>user</code> เพื่อรักษาข้อมูลเดิม</div>
+    </section>
+
+    <section id="backup-flow"><div class="section-title"><h2>10. Backup Flow แบบละเอียด</h2><small><span class="file">service/backup.go</span></small></div>
+      <div class="flow"><span>Discover</span><i>→</i><span>ValidateImage</span><i>→</i><span>CopyImage O_EXCL</span><i>→</i><span>EqualFiles</span><i>→</i><span>SHA256File</span><i>→</i><span>SaveBackup Transaction</span><i>→</i><span>AI Job</span><i>→</i><span>ลบต้นฉบับ</span></div>
+      <ol><li><b>ค้นหา:</b> <span class="file">backup.DiscoverImages()</span> เดิน Directory แบบ Recursive และรับเฉพาะ <code>.jpg/.jpeg/.png</code></li><li><b>คัดลอก:</b> <span class="file">backup.CopyImage()</span> เปิดปลายทางด้วย <code>O_EXCL</code> จึงไม่เขียนทับไฟล์เดิม ถ้าชื่อซ้ำจะใช้ <code>(1)</code>, <code>(2)</code></li><li><b>Verify:</b> เปรียบเทียบข้อมูลด้วย <span class="file">backup.EqualFiles()</span> และตรวจขนาดไฟล์</li><li><b>Hash:</b> <span class="file">analysis.SHA256File()</span> อ่านเป็น Chunk ไม่โหลดทั้งไฟล์เข้า RAM</li><li><b>Database:</b> <span class="file">repository.SaveBackup()</span> บันทึก Photo และ FileRecord ใน Transaction</li><li><b>ลบต้นทาง:</b> Service เรียก <span class="file">finishMove()</span> หลัง Copy + Verify + Save DB สำเร็จเท่านั้น ถ้าลบไม่ได้จะเก็บทั้งต้นทางและปลายทางพร้อมรายงานสถานะ</li></ol>
+    </section>
+
+    <section id="ai"><div class="section-title"><h2>11. AI Pipeline</h2><small>วิเคราะห์หลัง Backup</small></div>
+      <div class="panel"><p>AI ทำงานแยกจาก Backup ผ่าน Persistent Job Queue ใน <span class="file">service/ai_queue.go</span> เมื่อ Backup สำเร็จและมี ContentHash ระบบจะเรียก <span class="file">enqueueAIJob()</span> แล้ว Worker อ่าน Job ไปประมวลผล</p><div class="flow"><span>AIJob queued</span><i>→</i><span>Claim</span><i>→</i><span>ตรวจ BackupPath + Hash</span><i>→</i><span>ค้น Cache</span><i>→</i><span>วิเคราะห์ YOLO/Ollama</span><i>→</i><span>Save Result + Tags</span><i>→</i><span>completed</span></div><p>ถ้าปิดโปรแกรมระหว่างทำงาน <span class="file">ResetProcessingAIJobs()</span> จะคืน Job ที่ค้างจาก <code>processing</code> เป็น <code>queued</code> เมื่อเปิดใหม่ ส่วน Job ที่ failed จะถูกนำกลับคิวระหว่าง Reconcile หากรูปยังไม่มี Description</p></div>
+      <div class="grid"><div class="card"><h3>YOLO</h3><p><span class="file">analysis/yolo.go</span> เปิด Worker แบบ JSON Lines ค้างไว้ ใช้ <span class="file">tools/yolo_worker.py</span> หรือ Portable <span class="file">tools/bin/windows/yolo_worker.exe</span> เพื่อสร้าง Tag วัตถุ</p></div><div class="card"><h3>Ollama</h3><p><span class="file">analysis/ollama.go</span> ส่งภาพที่ Resize แล้วไป <code>/api/chat</code> ของโมเดล Vision เช่น <code>qwen2.5vl:3b</code> เพื่อสร้าง Description + Tags เป็น JSON ถ้า Ollama ไม่พร้อม YOLO ยังทำงานต่อได้</p></div><div class="card"><h3>CombinedAnalyzer</h3><p><span class="file">analysis/router.go</span> เรียก YOLO และ Vision พร้อมกัน แล้วรวม Tag/Description โดยความสำเร็จของตัวหนึ่งไม่ถูกทิ้งเพราะอีกตัวล้มเหลว</p></div><div class="card"><h3>Cache</h3><p><span class="file">repository.SaveAIResultAndApply()</span> บันทึก AIResult และนำ Description/AI Tags ไปใช้กับรูปใน Transaction เดียวกัน ไม่ส่งภาพ ContentHash เดิมไป AI ซ้ำ</p></div></div>
+      <div class="warnbox"><b>Tag Source:</b> Tag ที่ AI สร้างใช้ <code>source=ai</code>, Tag ผู้ใช้ใช้ <code>source=user</code> เมื่อ ContentHash เปลี่ยน ระบบลบเฉพาะ AI Tag ของผลเก่า ไม่ลบ Tag ที่ผู้ใช้เพิ่มเอง</div>
+    </section>
+
+    <section id="portable"><div class="section-title"><h2>12. Portable AI สำหรับเพื่อน</h2><small>สิ่งที่ทำเสร็จแล้ว</small></div>
+      <div class="panel"><p>มี Portable YOLO Worker สำหรับ Windows แล้ว เพื่อนที่มี Go, Node.js และ Wails CLI สามารถ Pull โค้ดแล้วสั่ง <code>wails dev</code> ได้โดยไม่ต้องติดตั้ง Python, Ultralytics หรือ Ollama เพิ่มเพื่อใช้ Tag</p><pre><code>models/yolo11n.pt
+tools/bin/windows/yolo_worker.exe</code></pre><p>Go จะค้นหาไฟล์จากโฟลเดอร์ Bundle ผ่าน <span class="file">analysis/yolo.go</span> และถ้าไม่พบ Portable Worker จึงค่อย fallback ไปหา Python Worker</p></div>
+      <div class="warnbox"><b>ข้อจำกัด:</b> Portable ที่ทำเสร็จตอนนี้คือ YOLO/Tag การสร้าง Description ยังเป็น Optional ผ่าน Ollama หากต้องการ Description แบบไม่ติดตั้งอะไรเลย ต้อง Bundle Caption Runtime + Vision Model แยก และต้องทำ Binary สำหรับ Windows/macOS</div>
+    </section>
+
+    <section id="tests"><div class="section-title"><h2>13. Tests และหลักฐานการทำงาน</h2><small>สิ่งที่ตรวจสอบแล้ว</small></div>
+      <table><thead><tr><th>กลุ่ม Test</th><th>ไฟล์</th><th>พิสูจน์อะไร</th></tr></thead><tbody><tr><td>Hash</td><td><span class="file">analysis/hash_test.go</span></td><td>เนื้อหาเหมือนกัน Hash เดิม, ต่างกัน Hash ต่างกัน, ไฟล์ใหญ่, ไฟล์หาย/อ่านไม่ได้</td></tr><tr><td>Backup</td><td><span class="file">backup/verify_test.go</span>, <span class="file">repository/backup_test.go</span></td><td>Copy/Verify, ห้ามเขียนทับ, Backup ซ้ำ, SaveBackup ไม่ล้าง Description/Hash/Tag</td></tr><tr><td>Migration</td><td><span class="file">database/database_test.go</span></td><td>ข้อมูล Photo/Tag/photo_tags เดิมอยู่ครบ, สร้าง AIResult และ Unique Cache Key</td></tr><tr><td>AI Queue</td><td><span class="file">service/ai_queue_test.go</span>, <span class="file">repository/ai_test.go</span></td><td>Cache Hit ไม่เรียก Analyzer ซ้ำ, Queue Resume, เขียน Backup/AI พร้อมกันไม่ Lock</td></tr><tr><td>AI Router</td><td><span class="file">analysis/router_test.go</span></td><td>YOLO Tag ยังสำเร็จแม้ Vision/Ollama ล้มเหลว และรวมผลสอง Analyzer</td></tr><tr><td>Portable Worker</td><td><span class="file">analysis/yolo_integration_test.go</span></td><td>เรียก YOLO Worker จริงผ่าน Go และได้ Tag จากภาพจริง โดยไม่เรียก Cloud API</td></tr></tbody></table>
+      <p class="note">ผลล่าสุดที่ตรวจ: <code>go test ./... -count=1</code> ผ่านทุก Package ที่มี Test, <code>go vet ./...</code> ผ่าน และ <code>wails build</code> สำเร็จ</p>
+    </section>
+
+    <section id="demo"><div class="section-title"><h2>14. แนวทางอธิบายตอน Demo</h2><small>พูดตามลำดับ</small></div>
+      <ol><li>เริ่มจาก Dashboard: อธิบายสถานะ DB, จำนวนรูป, จำนวน Tag และ Database Path</li><li>ไป Backup: เลือก Source/Destination, อธิบาย Discover → Copy → Verify → Hash → Save DB → ลบต้นฉบับ</li><li>แสดง Progress และอธิบายว่า AI แยก Worker ออกจาก Backup จึงเปลี่ยนหน้าได้</li><li>เปิด Tags: เลือกรูป เพิ่ม Tag เอง และชี้ว่า Source ของผู้ใช้ไม่ถูกลบเมื่อ AI วิเคราะห์ใหม่</li><li>เปิด Search: พิมพ์ชื่อไฟล์หรือ Description, เลือก Tag Cloud หลาย Tag และเปิดรายละเอียดรูป</li><li>อธิบาย AI: YOLO ทำ Tag Local แบบ Portable, Ollama เป็น Optional สำหรับ Description, Cache ใช้ ContentHash</li><li>ปิดด้วย Database: SQLite/GORM, AutoMigrate, AIResult, AIJob และ Transaction เพื่อรักษาข้อมูล</li></ol>
+      <h3>ประโยคอธิบาย Search สั้น ๆ</h3><pre><code>Frontend ส่ง query และ selected tags ผ่าน SearchPhotoLibrary ไป App
+App ส่งต่อ Service → Repository.SearchPhotos
+Repository trim/ลดตัวพิมพ์, ค้นชื่อไฟล์หรือ Description ด้วย LIKE
+และใช้ subquery photo_tags JOIN tags เพื่อกรองรูป จากนั้นส่ง Photo กลับมาแสดงเป็น Grid</code></pre>
+    </section>
+
+    <section id="limitations"><div class="section-title"><h2>15. ข้อจำกัดและสิ่งที่ต้องรู้</h2><small>พูดตามจริง</small></div>
+      <div class="grid"><div class="card"><h3>ระบบปฏิบัติการ</h3><p>Source Code เป็น Cross-platform แต่ Portable Worker ที่สร้างแล้วเป็น Windows จึงต้อง Build Worker แยกสำหรับ macOS</p></div><div class="card"><h3>ขนาดไฟล์</h3><p>Portable Worker รวม PyTorch/Ultralytics จึงมีขนาดใหญ่ ควรใช้ Git LFS หรือส่ง ZIP แยก ไม่ควรยัดไฟล์ใหญ่ลง Git ปกติหาก Remote จำกัดขนาด</p></div><div class="card"><h3>Description</h3><p>Ollama ไม่มี API Limit เพราะทำงาน Local แต่ต้องติดตั้ง Ollama และดาวน์โหลดโมเดล ส่วนโหมดไม่ติดตั้งใช้ YOLO Tag เป็นหลัก</p></div><div class="card"><h3>ColorTag</h3><p>ฟิลด์ ColorTag และ Source <code>color</code> ยังอยู่เพื่อความเข้ากันได้กับข้อมูลเดิม แต่ตัววิเคราะห์สีอัตโนมัติเดิมถูกนำออกจาก Analysis Pipeline แล้ว</p></div></div>
+    </section>
+
+    <section id="files"><div class="section-title"><h2>ภาคผนวก: ไฟล์สำคัญ</h2><small>เปิดอ่านโค้ดต่อได้</small></div>
+      <pre><code>main.go                         จุดเริ่มต้น Wails และ Embed Frontend
+app.go                          App Binding, Startup/Shutdown, AI Status
+app_backup.go                   API เลือกโฟลเดอร์และเริ่ม Backup
+app_photos.go                   API รูป, Search และ DTO
+app_tags.go                     API จัดการ Tag และ Tag Cloud
+service/backup.go               ลำดับ Business Logic ของ Backup
+service/ai_queue.go              Persistent AI Worker/Retry/Cache
+repository/photo.go              SaveBackup และ Photo Query
+repository/ai.go                 AIResult, AIJob และ AI Transaction
+repository/search.go             Query ชื่อไฟล์, Description และ Tag
+database/database.go             SQLite, WAL, busy_timeout, Migration
+model/photo.go                   Photo และ ContentHash
+model/tag.go                     Tag และ PhotoTag Source
+analysis/router.go               เลือก Provider และรวม YOLO/Ollama
+analysis/yolo.go                 เรียก Worker ผ่าน JSON Lines
+analysis/ollama.go                เรียก Ollama Vision แบบ Local
+backup/transfer.go               CopyImage + Verify
+backup/scanner.go                ค้นหารูปแบบ Recursive
+frontend/app/pages/index.vue     Dashboard
+frontend/app/pages/backup.vue    Backup + AI Status
+frontend/app/pages/tags.vue      จัดการ Tag
+frontend/app/pages/search.vue    Search + Tag Cloud + Detail</code></pre>
+    </section>
+    <p class="small muted">สร้างจากโครงสร้างและฟังก์ชันจริงในโปรเจกต์ PhotoBackup ไม่รวม API Key และไม่แสดงข้อมูลลับ</p>
+  </main>
+</div>
+<script>
+  const input=document.getElementById('filter');
+  input.addEventListener('input',()=>{const q=input.value.trim().toLowerCase();document.querySelectorAll('main section').forEach(s=>{s.classList.toggle('hide',q && !s.innerText.toLowerCase().includes(q))})});
+</script>
+</body>
+</html>

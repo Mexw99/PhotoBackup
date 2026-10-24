@@ -5,7 +5,7 @@
       <div class="header-titles">
         <h1 class="page-title">ค้นหารูปภาพ</h1>
         <p class="page-description">
-          ค้นหาชื่อไฟล์ แล้วคลิก Tag จาก Tag Cloud เพื่อกรองรูปภาพ
+          ค้นหาชื่อไฟล์หรือคำอธิบายภาพจาก AI แล้วคลิก Tag จาก Tag Cloud เพื่อกรองรูปภาพ
         </p>
       </div>
       <div v-if="!initialLoading && !error" class="header-stats">
@@ -30,14 +30,9 @@
     <!-- แผงค้นหาและตัวกรอง -->
     <section class="panel search-controls-panel">
       <form class="text-search" @submit.prevent="executeSearch">
-        <label for="photo-search">ค้นหาชื่อไฟล์</label>
+        <label for="photo-search">ค้นหาชื่อไฟล์หรือคำอธิบายภาพ</label>
         <div class="text-search-row">
-          <input
-            id="photo-search"
-            v-model="searchText"
-            type="search"
-            placeholder="เช่น IMG_001.jpg"
-          />
+          <input id="photo-search" v-model="searchText" type="search" placeholder="เช่น ทะเล หรือ IMG_001.jpg" />
           <button type="submit" class="retry-btn" :disabled="initialLoading || searching">
             ค้นหา
           </button>
@@ -48,16 +43,9 @@
       <div class="cloud-section">
         <div class="section-title-row">
           <h2 class="section-title">Tag Cloud ในระบบ</h2>
-          <span class="section-hint"
-            >เลือกได้หลาย Tag เพื่อแสดงรูปเพิ่ม กดซ้ำเพื่อยกเลิก</span
-          >
+          <span class="section-hint">เลือกได้หลาย Tag เพื่อแสดงรูปเพิ่ม กดซ้ำเพื่อยกเลิก</span>
         </div>
-        <TagCloud
-          :tags="tagCloud"
-          :selected-tags="selectedTags"
-          :clickable="true"
-          @toggle="toggleTag"
-        />
+        <TagCloud :tags="tagCloud" :selected-tags="selectedTags" :clickable="true" @toggle="toggleTag" />
       </div>
     </section>
 
@@ -93,19 +81,9 @@
 
       <!-- Grid แสดงรูปภาพผลลัพธ์จริง -->
       <div v-else class="photos-grid">
-        <article
-          v-for="photo in photos"
-          :key="photo.id"
-          class="photo-card"
-          @click="openPhotoDetail(photo)"
-        >
+        <article v-for="photo in photos" :key="photo.id" class="photo-card" @click="openPhotoDetail(photo)">
           <div class="photo-icon-box">
-            <img
-              v-if="photo.thumbnail"
-              :src="photo.thumbnail"
-              class="photo-thumb"
-              :alt="photo.originalName"
-            />
+            <img v-if="photo.thumbnail" :src="photo.thumbnail" class="photo-thumb" :alt="photo.originalName" />
             <span v-else class="camera-icon">📷</span>
           </div>
 
@@ -119,42 +97,29 @@
             </span>
 
             <div class="photo-card-tags">
-              <span
-                v-for="tag in photo.tags"
-                :key="tag.id"
-                class="tag-chip"
-                :class="{ 'is-matching': isTagMatched(tag.name) }"
-              >
+              <span v-for="tag in photo.tags" :key="tag.id" class="tag-chip"
+                :class="{ 'is-matching': isTagMatched(tag.name) }">
                 #{{ tag.name }}
               </span>
-              <span
-                v-if="!photo.tags || photo.tags.length === 0"
-                class="no-tag-hint"
-              >
+              <span v-if="!photo.tags || photo.tags.length === 0" class="no-tag-hint">
                 ไม่มี Tag
               </span>
             </div>
           </div>
 
           <div class="photo-card-action">
-            <button
-              type="button"
-              class="view-detail-hint"
-              :aria-label="`ดูรายละเอียด ${photo.originalName}`"
-              @click.stop="openPhotoDetail(photo)"
-            >
+            <button type="button" class="view-detail-hint" :aria-label="`ดูรายละเอียด ${photo.originalName}`"
+              @click.stop="openPhotoDetail(photo)">
               ดูรายละเอียด ➔
             </button>
           </div>
         </article>
       </div>
+
     </section>
 
     <!-- Modal รายละเอียดรูปภาพ -->
-    <PhotoDetailModal
-      :photo="selectedPhotoForModal"
-      @close="selectedPhotoForModal = null"
-    />
+    <PhotoDetailModal :photo="selectedPhotoForModal" @close="selectedPhotoForModal = null" />
   </div>
 </template>
 

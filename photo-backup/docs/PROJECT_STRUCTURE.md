@@ -15,8 +15,11 @@ photo-backup/
 ├── app_photos.go                # API ค้นหารูป และแปลงผลลัพธ์เป็น DTO
 ├── app_tags.go                  # API จัดการ Tag
 ├── app_types.go                 # DTO เดิมของ main.App สำหรับ Wails bindings
-├── model/                      # GORM schema: Photo, Tag, Setting, FileRecord
-│   ├── photo.go                # ข้อมูลรูป สี และเวลาแก้ไขต้นทาง
+├── model/                      # GORM schema: Photo, Tag, AIResult, AIJob, AIUsage
+│   ├── photo.go                # ข้อมูลรูป Hash, Description และเวลาแก้ไขต้นทาง
+│   ├── ai_result.go            # Cache ผล AI ตาม Content Hash/Profile/Prompt
+│   ├── ai_job.go               # Persistent AI Queue
+│   └── ai_usage.go             # โควตาคำขอ Provider รายวัน
 │   ├── tag.go                  # Tag และความสัมพันธ์ many-to-many
 │   ├── setting.go              # ตาราง settings: ต้นทาง/ปลายทาง
 │   └── file_record.go          # ตาราง files: ประวัติสำรองตามแนวกลางภาค
@@ -28,12 +31,13 @@ photo-backup/
 │   ├── search.go
 │   ├── settings.go
 │   └── repository_test.go
-├── service/                    # ประสานงาน use case และกำหนด DB timeout
+├── service/                    # ประสานงาน use case, Backup และ AI Queue
 │   ├── service.go
 │   ├── backup.go
 │   ├── photo.go
 │   ├── tag.go
 │   ├── settings.go
+│   └── ai_queue.go
 │   └── service_test.go
 ├── backup/                     # การทำงานกับไฟล์ แยกจาก Wails และฐานข้อมูล
 │   ├── scanner.go              # ค้นหารูปภาพ
@@ -41,8 +45,12 @@ photo-backup/
 │   ├── transfer.go             # เตรียมไฟล์ปลายทางและจัดการชื่อซ้ำก่อนย้ายสำเร็จ
 │   ├── verify.go               # เปรียบเทียบข้อมูลไฟล์จริงก่อนลบต้นทาง
 │   └── scanner_test.go
-├── analysis/                   # วิเคราะห์ภาพพื้นฐาน แยกจาก UI และฐานข้อมูล
-│   └── color.go                # เฉลี่ย RGB และคืนชื่อ Tag สีเดียว
+├── analysis/                   # AI, Hash, validation และ preprocessing แยกจาก UI/ฐานข้อมูล
+│   ├── router.go               # เลือก Provider เดียวตามการตั้งค่า
+│   ├── hash.go                 # SHA-256 แบบ Streaming
+│   ├── validation.go           # ตรวจ header รูปภาพด้วย DecodeConfig
+│   ├── preprocess.go           # ลดขนาดเฉพาะ payload Cloud ในหน่วยความจำ
+│   └── ollama_health.go        # ตรวจความพร้อม Ollama
 ├── frontend/
 │   ├── app/
 │   │   ├── app.vue             # NuxtLayout ครอบ NuxtPage
@@ -77,7 +85,7 @@ photo-backup/
 เมื่อสำรองรูป Service เรียก `backup` เพื่อค้นหารูป แล้วตรวจข้อมูลสำรองเดิม
 รูปที่ต้องย้ายจะผ่าน `analysis` เพื่อวิเคราะห์สี แล้ว `backup` เตรียมไฟล์ปลายทาง
 จากนั้น Repository บันทึกรูป ประวัติ `files` และความสัมพันธ์ Tag ใน transaction เดียว
-Service จึงลบต้นทางด้วย `finishMove` เป็นขั้นสุดท้าย เมื่อย้ายสำเร็จรูปจะเหลืออยู่ที่ปลายทาง
+Service คำนวณ ContentHash จากปลายทางแล้วสร้าง AI Job แยก ก่อนลบต้นทางด้วย `finishMove` เป็นขั้นสุดท้าย
 หากเป็นการทำต่อจากครั้งก่อน จะเทียบ bytes ผ่าน `backup.EqualFiles` ก่อนใช้ปลายทางเดิมและลบต้นทาง
 `Skipped` หมายถึงใช้ปลายทางเดิมและลบต้นทางสำเร็จแล้ว ไม่ใช่ข้ามโดยทิ้งต้นทางไว้
 ส่วน `app_backup.go` แปลง callback เป็น event `backup:progress` เพื่ออัปเดต UI
@@ -125,9 +133,9 @@ Service จึงทดสอบได้โดยไม่ต้องเปิ
 ทำทีละไฟล์เพื่อให้โค้ดอ่านง่าย รองรับ JPG, JPEG และ PNG
 ตาราง `settings/files` ใช้รูปแบบจากแกนงานกลางภาค แต่ไม่ได้นำเข้าฐานข้อมูลของโปรเจกต์อ้างอิงอัตโนมัติ
 
-Tag สีอัตโนมัติและ Tag ที่ผู้ใช้เพิ่มใช้ตาราง `tags/photo_tags` เดียวกัน
+Tag ที่ AI/ผู้ใช้เพิ่มใช้ตาราง `tags/photo_tags` เดียวกัน
 ลบ Tag ที่หน้า Tag คือการลบแถวและความสัมพันธ์ ไม่ลบรูป
-การวิเคราะห์สีทำเมื่อสำรองรูปใหม่ รูปเดิมที่ถูกข้ามจะไม่ถูกวิเคราะห์หรือสร้าง Tag กลับมาใหม่
+ผล AI ถูก Cache ด้วย ContentHash และ Job จะอ่านเฉพาะไฟล์ปลายทางที่ผ่าน Verify แล้ว
 
 ## ตรวจสอบก่อนส่งงาน
 

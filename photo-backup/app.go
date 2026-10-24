@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"photo-backup/database"
 	"photo-backup/service"
 )
@@ -23,10 +24,16 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	if a.service != nil {
 		a.service.SetContext(ctx)
+		a.service.SetAIProgressCallback(func(status service.AIQueueStatus) {
+			runtime.EventsEmit(ctx, "ai:progress", status)
+		})
 	}
 }
 
 func (a *App) shutdown(_ context.Context) {
+	if a.service != nil {
+		a.service.Shutdown()
+	}
 	if a.database != nil {
 		_ = a.database.Close()
 	}
@@ -44,3 +51,21 @@ func (a *App) GetDatabaseStatus() string {
 }
 
 func (a *App) GetDatabasePath() string { return a.dbPath }
+
+func (a *App) GetAIQueueStatus() service.AIQueueStatus {
+	if a.service == nil {
+		return service.AIQueueStatus{}
+	}
+	status, err := a.service.GetAIQueueStatus()
+	if err != nil {
+		return service.AIQueueStatus{}
+	}
+	return status
+}
+
+func (a *App) GetAIProviderStatus() service.AIProviderStatus {
+	if a.service == nil {
+		return service.AIProviderStatus{State: "disabled", Message: "database is not connected"}
+	}
+	return a.service.GetAIProviderStatus(a.ctx)
+}

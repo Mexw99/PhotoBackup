@@ -164,6 +164,7 @@
       <p class="progress-text">
         {{ progressCurrent }} / {{ progressTotal }} ไฟล์
         <span v-if="progressName"> — {{ progressName }}</span>
+        <span class="elapsed-text"> · ใช้เวลา {{ elapsedLabel }}</span>
       </p>
 
       <!-- สรุปผล -->
@@ -234,6 +235,33 @@
         </ul>
       </div>
     </section>
+
+    <section class="panel ai-status-panel">
+      <div class="section-heading">
+        <h2>สถานะการวิเคราะห์ AI</h2>
+      </div>
+      <p class="muted">
+        AI ทำงานแยกจาก Backup และอ่านจากไฟล์ปลายทางที่ตรวจสอบแล้ว
+      </p>
+      <div class="ai-status-grid">
+        <span>รอคิว <strong>{{ aiQueueStatus.queued }}</strong></span>
+        <span>กำลังวิเคราะห์ <strong>{{ aiQueueStatus.processing }}</strong></span>
+        <span>เสร็จแล้ว <strong>{{ aiQueueStatus.completed }}</strong></span>
+        <span>รอลองใหม่ <strong>{{ aiQueueStatus.retryWait }}</strong></span>
+        <span>ล้มเหลว <strong>{{ aiQueueStatus.failed }}</strong></span>
+      </div>
+      <p v-if="aiQueueStatus.queued || aiQueueStatus.processing || aiQueueStatus.retryWait" class="ai-elapsed-text">
+        กำลังทำงานมาแล้ว <strong>{{ aiElapsedLabel }}</strong>
+      </p>
+      <p v-else-if="aiQueueStatus.completed" class="ai-elapsed-text">
+        วิเคราะห์รอบล่าสุดใช้เวลา <strong>{{ aiElapsedLabel }}</strong>
+      </p>
+      <div class="ai-provider-status" :class="`state-${aiProviderStatus.state}`">
+        <strong>Provider:</strong> {{ aiProviderStatus.provider || "ยังไม่ได้ตั้งค่า" }}
+        <span v-if="aiProviderStatus.model"> · Model: {{ aiProviderStatus.model }}</span>
+        <span> · {{ aiProviderStatus.message || "" }}</span>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -253,11 +281,15 @@ const {
   progressCurrent,
   progressTotal,
   progressName,
+  elapsedLabel,
   backupSummary,
   progressPercent,
   successResults,
   skippedResults,
   failedResults,
+  aiQueueStatus,
+  aiElapsedLabel,
+  aiProviderStatus,
   readSourceFiles,
   chooseSourceFolder,
   clearSourceFolder,
@@ -440,6 +472,27 @@ button:disabled {
   padding: 10px 12px;
 }
 
+.ai-provider-status {
+  border-radius: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  font-size: 0.86rem;
+}
+
+.state-configured,
+.state-ready {
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.state-disabled,
+.state-not_running,
+.state-model_missing,
+.state-model_unusable {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
 .success-item {
   background: #f0fdf4;
   border-left: 3px solid #16a34a;
@@ -484,6 +537,11 @@ button:disabled {
   margin-top: 8px;
 }
 
+.elapsed-text {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
 /* ======== ผลลัพธ์ ======== */
 .result-summary {
   display: flex;
@@ -516,6 +574,30 @@ button:disabled {
 .result-card.skipped {
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.ai-status-panel {
+  background: #f8fafc;
+}
+
+.ai-status-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.ai-status-grid span {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+  padding: 8px 12px;
+}
+
+.ai-status-grid strong {
+  color: #1d4ed8;
+  margin-left: 4px;
 }
 
 @media (max-width: 650px) {

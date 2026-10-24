@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -17,6 +18,17 @@ type Store interface {
 	CreatePhoto(*model.Photo) error
 	FindBackup(string, string) (*model.Photo, error)
 	SaveBackup(*model.Photo) error
+	SaveAIAnalysis(uint, string, []string) error
+	FindPhoto(uint) (*model.Photo, error)
+	UpdatePhotoContentHash(uint, *string) error
+	FindAIResult(string, string, string) (*model.AIResult, error)
+	SaveAIResultAndApply(*model.AIResult, []string) error
+	CreateAIJobIfMissing(*model.AIJob) (*model.AIJob, error)
+	ResetProcessingAIJobs() error
+	ClaimNextAIJob(time.Time) (*model.AIJob, error)
+	UpdateAIJob(*model.AIJob) error
+	AIJobCounts() (map[string]int64, error)
+	ConsumeAIRequest(string, string, int) (bool, error)
 	GetSettings() (model.Setting, error)
 	SaveSettings(string, string) error
 	ListPhotos() ([]model.Photo, error)

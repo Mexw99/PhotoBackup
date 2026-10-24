@@ -2,6 +2,7 @@ package database_test
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,14 +79,200 @@ func TestMigrationPreservesExistingPhotosAndMidtermTables(t *testing.T) {
 	}
 }
 
-func TestNewDatabaseHasNoDescriptionColumn(t *testing.T) {
+func TestNewDatabaseHasDescriptionColumn(t *testing.T) {
 	db, err := database.OpenAt(filepath.Join(t.TempDir(), "new.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if db.GORM().Migrator().HasColumn(&model.Photo{}, "description") {
-		t.Fatal("new database still has the removed description column")
+	if !db.GORM().Migrator().HasColumn(&model.Photo{}, "description") {
+		t.Fatal("new database is missing the AI description column")
+	}
+}
+
+func TestSQLiteConfiguresBusyTimeoutAndWAL(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pragma.db")
+	db, err := database.OpenAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	var timeout int
+	if err := db.GORM().Raw("PRAGMA busy_timeout").Scan(&timeout).Error; err != nil {
+		t.Fatal(err)
+	}
+	if timeout < 5000 {
+		t.Fatalf("busy_timeout = %d, want at least 5000ms", timeout)
+	}
+	var journalMode string
+	if err := db.GORM().Raw("PRAGMA journal_mode").Scan(&journalMode).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.EqualFold(journalMode, "wal") {
+		t.Fatalf("journal_mode = %q, want WAL", journalMode)
+	}
+	sqlDB, err := db.GORM().DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sqlDB.Stats().MaxOpenConnections != 1 {
+		t.Fatalf("MaxOpenConnections = %d, want 1 so PRAGMA applies to every pooled connection", sqlDB.Stats().MaxOpenConnections)
+	}
+	// Close and reopen the database to force a genuinely new SQLite connection.
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err = database.OpenAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	sqlDB, err = db.GORM().DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sqlDB.Stats().MaxOpenConnections != 1 {
+		t.Fatalf("reopened MaxOpenConnections = %d, want 1", sqlDB.Stats().MaxOpenConnections)
+	}
+	var newTimeout int
+	if err := db.GORM().Raw("PRAGMA busy_timeout").Scan(&newTimeout).Error; err != nil {
+		t.Fatal(err)
+	}
+	var newJournalMode string
+	if err := db.GORM().Raw("PRAGMA journal_mode").Scan(&newJournalMode).Error; err != nil {
+		t.Fatal(err)
+	}
+	if newTimeout < 5000 || !strings.EqualFold(newJournalMode, "wal") {
+		t.Fatalf("new pooled connection pragmas: timeout=%d journal=%q", newTimeout, newJournalMode)
+	}
+}
+
+func TestMigrationClassifiesExistingPhotoTagsAsUser(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old-tags.db")
+	old, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := old.AutoMigrate(&model.Photo{}, &model.Tag{}); err != nil {
+		t.Fatal(err)
+	}
+	photo := model.Photo{OriginalName: "old.jpg", OriginalPath: "source/old.jpg", BackupPath: "backup/old.jpg", BackedUpAt: time.Now(), Tags: []model.Tag{{Name: "existing"}}}
+	if err := old.Create(&photo).Error; err != nil {
+		t.Fatal(err)
+	}
+	sqlDB, err := old.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := database.OpenAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	var link model.PhotoTag
+	if err := db.GORM().Where("photo_id = ? AND tag_id = ?", photo.ID, 1).First(&link).Error; err != nil {
+		t.Fatal(err)
+	}
+	if link.Source != "user" {
+		t.Fatalf("old tag source = %q, want user", link.Source)
+	}
+}
+
+func TestMigrationAddsContentHashAndAIResultCacheWithoutChangingExistingData(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ai-cache.db")
+	old, err := gorm.Open(sqlite.Open(path), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := old.AutoMigrate(&model.Photo{}, &model.Tag{}); err != nil {
+		t.Fatal(err)
+	}
+	contentHash := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	photo := model.Photo{
+		OriginalName: "old.jpg",
+		OriginalPath: "source/old.jpg",
+		BackupPath:   "backup/old.jpg",
+		FileSize:     123,
+		Description:  "คำอธิบายเดิม",
+		BackedUpAt:   time.Now(),
+		Tags:         []model.Tag{{Name: "holiday"}},
+	}
+	if err := old.Create(&photo).Error; err != nil {
+		t.Fatal(err)
+	}
+	oldSQL, err := old.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := oldSQL.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := database.OpenAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	if !db.GORM().Migrator().HasColumn(&model.Photo{}, "content_hash") {
+		t.Fatal("migration did not add photos.content_hash")
+	}
+	if !db.GORM().Migrator().HasIndex(&model.Photo{}, "idx_photos_content_hash") {
+		t.Fatal("migration did not add the content hash index")
+	}
+	if !db.GORM().Migrator().HasTable(&model.AIResult{}) {
+		t.Fatal("migration did not add the ai_results table")
+	}
+	if !db.GORM().Migrator().HasIndex(&model.AIResult{}, "idx_ai_results_cache_key") {
+		t.Fatal("migration did not add the AI cache unique index")
+	}
+
+	var preserved model.Photo
+	if err := db.GORM().Preload("Tags").First(&preserved, photo.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if preserved.Description != "คำอธิบายเดิม" || len(preserved.Tags) != 1 || preserved.Tags[0].Name != "holiday" {
+		t.Fatalf("migration changed existing photo data: %+v", preserved)
+	}
+	if preserved.ContentHash != nil {
+		t.Fatalf("migration unexpectedly backfilled content hash: %v", *preserved.ContentHash)
+	}
+
+	result := model.AIResult{
+		ContentHash:     contentHash,
+		AnalysisProfile: "default-vision",
+		Provider:        "test",
+		Model:           "test-model",
+		PromptVersion:   "v1",
+		Description:     "คำอธิบายจาก Cache",
+		TagsJSON:        `["holiday","ทะเล"]`,
+	}
+	if err := db.GORM().Create(&result).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var loaded model.AIResult
+	if err := db.GORM().First(&loaded, result.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if loaded.ContentHash != contentHash || loaded.AnalysisProfile != "default-vision" || loaded.TagsJSON != result.TagsJSON {
+		t.Fatalf("AI result was not preserved: %+v", loaded)
+	}
+
+	duplicate := model.AIResult{
+		ContentHash:     contentHash,
+		AnalysisProfile: "default-vision",
+		Provider:        "other-provider",
+		Model:           "other-model",
+		PromptVersion:   "v1",
+		Description:     "duplicate",
+		TagsJSON:        `[]`,
+	}
+	if err := db.GORM().Create(&duplicate).Error; err == nil {
+		t.Fatal("expected duplicate AI cache key to be rejected")
 	}
 }
 
@@ -97,15 +284,7 @@ func databaseWithOldDescription(t *testing.T, viaGORM bool) (*database.Database,
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	if viaGORM {
-		if err := db.GORM().Migrator().AddColumn(&legacyPhoto{}, "Description"); err != nil {
-			t.Fatal(err)
-		}
-	} else {
-		if err := db.GORM().Exec("ALTER TABLE photos ADD COLUMN description TEXT NOT NULL DEFAULT ''").Error; err != nil {
-			t.Fatal(err)
-		}
-	}
+	_ = viaGORM // OpenAt already creates the description column for the AI feature.
 	now := time.Now()
 	photo := model.Photo{
 		OriginalName: "red.png", OriginalPath: "source/red.png", BackupPath: "backup/red.png",
@@ -156,7 +335,7 @@ func checkPreservedData(t *testing.T, conn *gorm.DB, expected model.Photo) {
 	}
 }
 
-func TestMigrationDropsDescriptionAndPreservesOtherData(t *testing.T) {
+func TestMigrationKeepsDescriptionAndPreservesOtherData(t *testing.T) {
 	for _, test := range []struct {
 		name    string
 		viaGORM bool
@@ -174,8 +353,8 @@ func TestMigrationDropsDescriptionAndPreservesOtherData(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = db.Close() })
-			if db.GORM().Migrator().HasColumn(&model.Photo{}, "description") {
-				t.Fatal("old description column was not removed")
+			if !db.GORM().Migrator().HasColumn(&model.Photo{}, "description") {
+				t.Fatal("description column was removed")
 			}
 			checkPreservedData(t, db.GORM(), expected)
 			for _, name := range []string{"idx_photos_backup_path", "idx_photos_original_path"} {
@@ -187,7 +366,7 @@ func TestMigrationDropsDescriptionAndPreservesOtherData(t *testing.T) {
 			if err := db.GORM().Create(&duplicate).Error; err == nil {
 				t.Fatal("backup path lost its unique constraint")
 			}
-			// เปิดครั้งต่อไปต้องไม่สร้าง description กลับมาอีก
+			// เปิดครั้งต่อไปต้องยังเก็บ description ไว้
 			if err := db.Close(); err != nil {
 				t.Fatal(err)
 			}
@@ -195,8 +374,8 @@ func TestMigrationDropsDescriptionAndPreservesOtherData(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if db.GORM().Migrator().HasColumn(&model.Photo{}, "description") {
-				t.Fatal("description returned after reopening")
+			if !db.GORM().Migrator().HasColumn(&model.Photo{}, "description") {
+				t.Fatal("description disappeared after reopening")
 			}
 			checkPreservedData(t, db.GORM(), expected)
 		})

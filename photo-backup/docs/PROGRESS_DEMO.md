@@ -1,154 +1,131 @@
-# คู่มืออ่านโค้ดและเตรียมตรวจความก้าวหน้า
+# คู่มืออ่านโค้ดและเตรียม Progress/Technical Demo
 
-PhotoBackup ต่อจากแกนงานกลางภาคด้วย Wails + Nuxt และ SQLite/GORM
-รอบนี้ใช้การย้ายรูปจริง วิเคราะห์สีเป็น Tag และค้นจากชื่อไฟล์หรือ Tag Cloud
-ตารางต่อไปนี้ใช้เตรียมสาธิต ไม่ใช่การรับประกันคะแนนจากอาจารย์
+PhotoBackup ใช้ Wails v2 + Nuxt 4 + Go + SQLite/GORM สำหรับย้ายรูปจาก Flash Drive หรือโทรศัพท์ไปยังปลายทาง
+ระบบยังคงพฤติกรรมเดิมของงานกลางภาค คือ Copy → Verify → บันทึก SQLite → ลบต้นทางเป็นขั้นตอนสุดท้าย
+และเพิ่ม AI Pipeline ที่แยกจาก Backup เพื่อไม่ให้การวิเคราะห์ทำให้การย้ายไฟล์ช้า/ล้มเหลว
 
-## อ่านเร็ว เริ่ม 3 ไฟล์
+## สรุป Feature ตามเกณฑ์
 
-1. `service/backup.go` — `StartBackup` ตรวจโฟลเดอร์ ดูสี เตรียมปลายทาง บันทึก DB แล้วลบต้นทาง
-2. `analysis/color.go` — `DetectColor` หาค่าเฉลี่ย RGB แล้วใช้ `if` คืนชื่อสีเดียว
-3. `repository/photo.go` — `FindBackup` หาประวัติ และ `SaveBackup` บันทึกรูป/Tag/ประวัติใน transaction
-
-จากนั้นดู UI: `frontend/app/app.vue` → `layouts/default.vue` → `pages/backup.vue` / `pages/search.vue`
-และ `composables/useBackup.ts` / `composables/usePhotoSearch.ts` ที่เรียก Wails bindings
-
-## เทียบกับเกณฑ์ในภาพ
-
-| เกณฑ์เทคนิค | คะแนนตามภาพ | สิ่งที่แสดงในงานนี้ |
-| --- | ---: | --- |
-| Wails + Nuxt และรันบน Windows/macOS | 1 | Go เปิด Wails และ Nuxt แสดง 4 หน้า; ผลตรวจ Windows และ macOS ต้องแยกตามที่ทดสอบจริง |
-| SQLite + GORM | 2 | เก็บรูป Tag ความสัมพันธ์ ประวัติย้ายรูป และโฟลเดอร์ที่เลือก |
-| Backup เทียบเท่าข้อสอบกลางภาค | 2 | จำต้นทาง/ปลายทาง ย้ายรูป จัดการชื่อซ้ำ บันทึกประวัติ และส่ง progress |
-| วิเคราะห์ภาพเป็น Tag | 4 | อ่านสีหลักโดยประมาณจาก RGB เป็น Tag สีเดียว และจัด Tag เองเพิ่มเติมได้ |
-| ค้นหาและแสดงภาพผ่าน Tag Cloud/ช่องค้นหา | 3 | แสดงหลายรูป ค้นชื่อไฟล์ และเลือก Tag จาก Cloud ได้หลายสี |
-
-เทคนิครวม 12 คะแนน ส่วนความคืบหน้า 3 คะแนนและความพยายาม/ความเข้าใจ 5 คะแนน
-ต้องอธิบายและสาธิตด้วยตนเอง
-แกนกลางภาคที่ต่อยอดคือการตั้งค่าโฟลเดอร์ ย้ายไฟล์ และเก็บประวัติ
-ยังไม่ได้ย้ายทุกคำสั่ง CLI เช่น `/check`, `/delete`, `/clean` ขึ้น UI
-
-## พฤติกรรมหลัก
-
-- **Backup เป็นการย้าย:** เตรียมไฟล์ปลายทางและบันทึก SQLite ก่อนลบต้นทาง เมื่อสำเร็จรูปจะเหลือที่ปลายทาง
-- **ค้นชื่อไฟล์:** ช่องค้นหาใช้ชื่อไฟล์ เช่น `red` หรือ `IMG_001`
-- **เลือกหลายสี:** กด Tag ใน Cloud เพื่อเลือกหรือยกเลิก แสดงรูปที่มี Tag ใด Tag หนึ่งที่เลือก หรือ OR
-- **ไม่เลือก Tag:** แสดงรูปทั้งหมดตามชื่อไฟล์ที่ค้น ถ้าชื่อไฟล์ว่างด้วยจะแสดงทุกรูป
-- **ลบ Tag:** ลบจาก SQLite และความสัมพันธ์กับรูป โดยไม่ลบไฟล์รูปที่ปลายทาง
-
-## ลำดับสาธิตประมาณ 5 นาที
-
-มีรูปทดลอง `red.png`, `green.png`, `blue.png` ใน `photo-backup/demo/source/`
-ให้คัดลอกรูปชุดนี้ไปโฟลเดอร์ทดลองก่อน และใช้โฟลเดอร์ทดลองเป็นต้นทาง
-เพราะการสาธิตย้ายสำเร็จจะลบรูปออกจากต้นทางจริง
-ปลายทางต้องแยกจากต้นทางและไม่ซ้อนกัน
-
-1. เปิดหน้า **Backup** เลือกโฟลเดอร์ทดลองต้นทาง/ปลายทาง และบันทึกโฟลเดอร์
-2. กด **เริ่ม Backup** ดู progress และสรุปผลของแต่ละไฟล์
-3. เปิดโฟลเดอร์ทั้งสองเพื่อแสดงว่าต้นทางไม่มีรูปที่ย้ายสำเร็จแล้ว และปลายทางมีรูปครบ
-4. เปิดหน้า **Search** โดยยังไม่เลือก Tag เพื่อแสดงรูปทั้งหมด
-5. กด Tag `สีแดง` และ `สีน้ำเงิน` พร้อมกัน จะแสดงรูปสีแดงหรือสีน้ำเงิน
-6. กด Tag ที่เลือกเพื่อยกเลิกให้หมด จากนั้นค้นชื่อ `red` และลองเลือก Tag ร่วมกับชื่อไฟล์
-7. เปิดหน้า **Tag** เพิ่ม Tag เอง แล้วลบผ่าน Tag Cloud เพื่อแสดงว่าลบจาก SQLite โดยรูปยังอยู่
-8. เปิดแอปใหม่เพื่อตรวจว่ารูป Tag และโฟลเดอร์ที่บันทึกยังอยู่
-
-## เส้นทางโค้ดที่ควรรู้
-
-ไฟล์อ้างอิงจากโฟลเดอร์ `photo-backup/`
-
-| งาน | ไฟล์/ฟังก์ชันหลัก |
+| เกณฑ์ | ไฟล์/เทคนิคที่ใช้ |
 | --- | --- |
-| เปิดแอปและประกอบแต่ละชั้น | `main.go` เปิด DB → Repository → Service → App → Wails |
-| โครงหน้าร่วม | `frontend/app/app.vue`, `layouts/default.vue` ใช้ NuxtLayout/NuxtPage/slot |
-| โหลด/บันทึกโฟลเดอร์ | `App.GetBackupSettings` / `App.SaveBackupSettings` → `service/settings.go` → `repository/settings.go` |
-| เริ่มย้ายรูป | `pages/backup.vue` → `useBackup.ts` → `App.StartBackup` → `Service.StartBackup` |
-| ค้นหารูปและตรวจโฟลเดอร์ | `backup/scanner.go`: `DiscoverImages`, `backup/validation.go`: `ValidateFolders` |
-| จัดการไฟล์ปลายทาง | `backup/transfer.go`: `CopyImage` เตรียมไฟล์และชื่อซ้ำก่อนบันทึก DB |
-| ตรวจไฟล์และลบต้นทาง | `backup/verify.go`: `EqualFiles` เทียบ bytes และ `service/backup.go`: `finishMove` ลบต้นทางหลัง DB พร้อม |
-| วิเคราะห์สี | `analysis/color.go`: `DetectColor` |
-| บันทึกรูป + Tag + ประวัติ | `repository/photo.go`: `SaveBackup` |
-| ค้นชื่อไฟล์และ Tag | `pages/search.vue` → `usePhotoSearch.ts` → `App.SearchPhotoLibrary(query, tags)` → Service → `Repository.SearchPhotos` |
-| รายละเอียดภาพ | `frontend/app/components/search/photo-detail-modal.vue` แสดงรูป ชื่อไฟล์ ตำแหน่ง และ Tag |
-| ลบ Tag จาก SQLite | `App.DeleteTag` → `Service.DeleteTag` → `Repository.DeleteTag` |
+| Wails + Nuxt, Windows/macOS | `main.go`, `app*.go`, `frontend/app/pages/`, `wails.json` |
+| SQLite + GORM | `database/database.go`, `model/`, `repository/` |
+| Backup เทียบเท่ากลางภาค | `backup/transfer.go`, `backup/verify.go`, `service/backup.go` |
+| วิเคราะห์ Description/Tag ด้วย AI | `analysis/gemini.go`, `analysis/openai.go`, `analysis/ollama.go`, `service/ai_queue.go` |
+| ค้นหาหลายรูปและ Tag Cloud | `repository/search.go`, `app_photos.go`, `usePhotoSearch.ts`, `tag-cloud.vue` |
 
-เส้นทางทั่วไป: **Page → Composable → Wails binding → App → Service → Repository → SQLite**
-งานไฟล์อยู่ใน `backup/` และงานสีอยู่ใน `analysis/` แยกจาก UI และ SQL
+## Flow สำคัญที่ควรอธิบายใน Demo
 
-## ขั้นตอนย้ายรูปและ progress
+### 1. เปิดโปรแกรมและต่อชั้นระบบ
 
-ระบบทำทีละไฟล์เพื่อให้โค้ดอ่านง่าย ไม่ใช้ worker pool หรือ SHA-256
-อ่านสีและเตรียมไฟล์ปลายทางก่อน แล้วบันทึกข้อมูลรูป ประวัติ และ Tag ใน transaction เดียว
-เมื่อข้อมูลพร้อมแล้วจึงลบไฟล์ต้นทางเป็นขั้นสุดท้าย
-ไฟล์ชื่อซ้ำใช้ชื่อใหม่เพื่อไม่เขียนทับไฟล์ปลายทางที่มีอยู่
+`main.go` เปิด `database.OpenDefault()` แล้วประกอบ `Repository → Service → App → Wails`.
+`database.OpenAt()` เรียก GORM `AutoMigrate` เพิ่ม/ตรวจตารางโดยไม่ลบข้อมูลเดิม
+เมื่อ Wails เรียก `App.startup()` จะส่ง context ให้ Service และเริ่ม AI Queue Worker ถ้ามี Analyzer ที่เปิดใช้งาน
 
-Progress นับจำนวนไฟล์ที่ประมวลผลจบ รวมทั้งรายการที่ผิดพลาด
-จึงต้องอ่านสรุปด้วย แม้แถบ progress จะครบแล้ว
+### 2. Backup และการป้องกันไฟล์ต้นฉบับ
 
-| ผลลัพธ์ | ความหมาย |
+`frontend/app/pages/backup.vue` เรียก `useBackup.ts` ซึ่งเรียก Wails binding `App.StartBackup`.
+`service.StartBackup` ตรวจโฟลเดอร์ด้วย `backup.ValidateFolders` และค้นไฟล์ด้วย `backup.DiscoverImages`.
+`backupPhoto` ทำตามลำดับนี้:
+
+1. `analysis.ValidateImage` ใช้ `image.DecodeConfig` อ่าน header โดยไม่โหลด pixel ทั้งไฟล์
+2. `backup.CopyImage` ใช้ `O_EXCL` จึงไม่เขียนทับไฟล์เดิม และเติม `(1)`, `(2)` เมื่อชื่อซ้ำ
+3. `backup.EqualFiles` เปรียบเทียบ byte ทีละ 64 KB
+4. `analysis.SHA256File` คำนวณ Hash แบบ Streaming จากไฟล์ปลายทางที่ผ่าน Verify แล้ว
+5. `repository.SaveBackup` บันทึก `photos`, `files` และความสัมพันธ์ใน transaction
+6. สร้าง `AIJob` แบบ best-effort หลัง DB สำเร็จ งาน AI ไม่ทำให้ Backup ล้มเหลว
+7. `finishMove` ตรวจปลายทางและ source ก่อนเรียก `os.Remove`
+
+ถ้า Copy/Verify/DB ล้มเหลว จะลบเฉพาะสำเนาใหม่และเก็บต้นฉบับไว้
+ถ้าลบต้นทางไม่ได้ จะเก็บทั้งต้นทาง ปลายทาง และ DB ไว้เพื่อกด Retry ได้
+
+### 3. Content Hash และ Cache
+
+`model.Photo.ContentHash` เป็น nullable เพื่อรองรับข้อมูลเก่า และมี index
+`model.AIResult` เก็บ `ContentHash`, `AnalysisProfile`, `Provider`, `Model`, `PromptVersion`, `Description`, `TagsJSON`.
+Cache Key คือ `ContentHash + AnalysisProfile + PromptVersion` โดย Provider/Model เป็นข้อมูลอ้างอิง ไม่ใช่ส่วนของ Key
+ไฟล์คนละชื่อที่มี byte เหมือนกันจึงใช้ผลเดียวกันได้ ส่วนไฟล์ที่เนื้อหาเปลี่ยนจะมี Hash ใหม่
+
+`repository.FindAIResult` ตรวจ Cache ก่อนเรียก Analyzer
+`repository.SaveAIResultAndApply` ใช้ transaction เดียว upsert Cache และเติม Description/Tags ให้ทุก Photo ที่ Hash เดียวกัน
+
+### 4. AI Job Queue
+
+`model.AIJob` เก็บสถานะ `queued`, `processing`, `completed`, `failed`, `retry_wait`, จำนวนครั้ง, error และเวลา
+Unique Key ของ Job คือ `PhotoID + AnalysisProfile + PromptVersion` จึงไม่สร้างงานซ้ำ
+เมื่อเริ่มโปรแกรม `ResetProcessingAIJobs` เปลี่ยนงานที่ค้าง `processing` กลับเป็น `queued`
+Worker อ่านเฉพาะ `Photo.BackupPath` และตรวจ SHA-256 ซ้ำก่อนส่ง AI ห้ามอ่าน/แก้/ลบต้นฉบับ
+
+หน้า Backup แสดงสถานะผ่าน `App.GetAIQueueStatus` และ event `ai:progress` จึงเปลี่ยนไปหน้าอื่นแล้วกลับมาดูได้
+
+### 5. Provider, ค่าใช้จ่าย และ Retry
+
+`analysis/router.go` เลือก Provider เพียงตัวเดียวจาก `AI_PROVIDER`; ค่า `all` หรือรายการคั่น comma ไม่ถูกหมุนอัตโนมัติ
+ค่าเริ่มต้น `AI_ALLOW_CLOUD=false` และ `AI_ALLOW_LOCAL=false` เพื่อไม่เรียกบริการเองเมื่อเปิดโปรแกรม
+เปิด Cloud หรือ Local ต้องตั้งค่าเองใน environment
+
+HTTP 429/5xx และ network error เป็นกลุ่มที่ Retry ได้ตาม `AI_MAX_RETRIES`
+รองรับ `Retry-After` และ Exponential Backoff
+`AI_DAILY_LIMIT` นับคำขอที่เรียก Provider จริงในตาราง `ai_usages`; Cache Hit ไม่ถูกนับ
+Error ที่เก็บใน `AIJob.LastError` จะ redact ค่า Key จาก environment
+
+### 6. Local Ollama และ Cloud Preprocessing
+
+เมื่อเลือก Ollamaและอนุญาต Local แล้ว `OllamaAnalyzer.HealthCheck` เรียก `/api/tags` เพื่อแยก `ready`, `not_running`, `model_missing`, `model_unusable`
+ไม่ดาวน์โหลด Model และไม่บังคับ GPU NVIDIA; CPU ใช้ได้แต่ช้ากว่า ควรตั้ง `AI_MAX_CONCURRENCY=1`
+
+Gemini/OpenAI ใช้ `readImageForCloudAI` resize ภาพใหญ่ในหน่วยความจำด้านยาวไม่เกิน 1600px
+ไม่เขียนทับไฟล์ Backup และ ContentHash คำนวณก่อน preprocessing เสมอ
+PNG จะคงรูปแบบ PNG เพื่อไม่ทำลาย transparency; EXIF orientation ยังเป็นข้อจำกัดที่ต้องทดสอบกับภาพจริง
+
+## ตารางฐานข้อมูล
+
+| ตาราง | หน้าที่ |
 | --- | --- |
-| ย้ายสำเร็จ | สร้างไฟล์ปลายทาง บันทึก DB และลบต้นทางครบแล้ว |
-| ใช้ไฟล์ปลายทางเดิม | เทียบ bytes กับไฟล์ที่เคยบันทึกแล้วตรงกัน จึงใช้ไฟล์เดิมและลบต้นทางสำเร็จ |
-| ล้มเหลว | ยังย้ายไม่ครบ ให้ดูข้อความของไฟล์นั้นก่อนลองใหม่ |
+| `photos` | path ต้นทาง/ปลายทาง, ขนาด, เวลา, `content_hash`, Description |
+| `tags` | ชื่อ Tag กลาง |
+| `photo_tags` | ความสัมพันธ์หลายต่อหลายระหว่าง Photo กับ Tag |
+| `files` | ประวัติ Backup ตามงานกลางภาค |
+| `settings` | source/destination ที่ผู้ใช้บันทึก |
+| `ai_results` | Cache ผล AI ตาม Content Hash/Profile/Prompt |
+| `ai_jobs` | Queue งาน AI ที่ทำต่อหลังเปิดโปรแกรมใหม่ได้ |
+| `ai_usages` | ตัวนับคำขอ Provider จริงรายวัน |
 
-ถ้า DB บันทึกไม่สำเร็จ จะลบเฉพาะไฟล์ปลายทางที่เพิ่งสร้างและเก็บต้นทางไว้
-ถ้าปลายทางและ DB พร้อมแล้วแต่ลบต้นทางไม่ได้ จะรายงานล้มเหลวโดยเก็บต้นทาง ปลายทาง และ DB ไว้
-แก้ปัญหาแล้วกดใหม่ ระบบเทียบ bytes ก่อนใช้ปลายทางเดิมและลบต้นทาง ไม่สร้างไฟล์หรือประวัติซ้ำ
-เมื่อย้ายครบแล้ว UI โหลดรายการต้นทางใหม่ รูปที่ย้ายสำเร็จจะหายจากรายการ
-การเรียก Backup เมื่อไม่มีรูปในต้นทางจะคืนผลรวม 0 และไม่เพิ่มประวัติ
+Migration ใช้ GORM `AutoMigrate` เพิ่มคอลัมน์/ตาราง/Index เท่านั้น
+Integration tests ใน `database/database_test.go` ใช้ SQLite ใน `t.TempDir()` และตรวจว่า Description, Tags, `photo_tags`, files, settings เดิมยังอยู่
 
-## วิเคราะห์สีแบบง่าย
+## เส้นทาง Search
 
-1. `image.Decode` เปิดรูป JPG/PNG
-2. เลือกอ่านพิกเซลเป็นช่วง ๆ ประมาณ 64 × 64 จุด และข้ามจุดที่โปร่งใสมาก
-3. รวม R, G, B แล้วหารด้วยจำนวนจุดเพื่อหาค่าเฉลี่ย
-4. ใช้ `if` เปรียบเทียบค่าสีเพื่อคืนชื่อเดียว เช่น `สีแดง`, `สีเขียว`, `สีน้ำเงิน`, `สีเหลือง`, `สีเทา`
-5. Service ส่งชื่อสีให้ Repository สร้างและผูก Tag กับรูป
+`pages/search.vue` เก็บช่องคำค้นและ Tag ที่เลือก → `usePhotoSearch.ts` → `App.SearchPhotoLibrary(query, tags)`
+→ `service.SearchPhotoLibrary` → `repository.SearchPhotos`.
+Repository trim ช่องว่าง แปลงตัวพิมพ์เป็น lower-case และค้น `original_name` หรือ `description` ด้วย `LIKE`
+ถ้ามี Tag จะใช้ subquery ของ `photo_tags`/`tags` แบบ OR และ `Preload("Tags")` เพื่อแสดงหลายรูปพร้อม Tag
+`GetTagCloud` นับจำนวนรูปต่อ Tag และ `tag-cloud.vue` จำกัดพื้นที่พร้อม scroll เพื่อไม่ให้ Tag จำนวนมากทำให้หน้าแตก
 
-เป็นการดูโทนสีโดยประมาณ ภาพหลายสีอาจได้ผลต่างจากสีที่เรามองว่าเด่น
-ไม่มีการจำแนกวัตถุหรือเพิ่ม Tag ปี แนวภาพ ชนิดไฟล์ และความสว่าง
+## การตั้งค่าและความปลอดภัย
 
-## ตาราง SQLite
+ใช้ `.env.example` และ `config.example.json` เป็นตัวอย่างเท่านั้น ห้ามใส่ API Key จริงใน Git
+หากเคยใส่ Key จริงใน `config.json`, แชต หรือไฟล์ที่แชร์ ให้ revoke และออก Key ใหม่
+ห้ามพิมพ์ Key ใน log/error/test และไม่ควรส่ง `config.json` ให้เพื่อนหรือ commit ขึ้น remote
 
-| ตาราง | ใช้เก็บ |
-| --- | --- |
-| `settings` | โฟลเดอร์ `source` และ `dest` |
-| `files` | ปลายทาง ชื่อไฟล์ และสถานะประวัติตามแนวกลางภาค |
-| `photos` | ต้นทาง/ปลายทาง ขนาด เวลาแก้ไข สี และเวลา Backup |
-| `tags` | ชื่อ Tag ที่ใช้ร่วมกัน |
-| `photo_tags` | ความสัมพันธ์หลายต่อหลายระหว่างรูปกับ Tag |
+## คำสั่งตรวจสอบ
 
-ฐานข้อมูลอยู่ที่ `os.UserConfigDir()/PhotoBackup/photo-backup.db`
-บน Windows ปกติคือ `%APPDATA%\PhotoBackup\photo-backup.db`
-ตาราง `files/settings` ต่อยอดรูปแบบข้อมูลกลางภาค ไม่ได้นำเข้าฐานข้อมูลของเพื่อนอัตโนมัติ
+```powershell
+go build ./...
+go vet ./...
+go test ./...
+wails generate module
+cd frontend
+npm run typecheck
+npm run generate
+cd ..
+wails build
+```
 
-## ต่างจากโปรเจกต์อ้างอิงอย่างไร
+Unit/Integration tests ใช้ไฟล์ชั่วคราวและ Fake Analyzer/HTTP test เท่านั้น ไม่เรียก Gemini, OpenAI หรือ Ollama จริง
+ยังต้องทดสอบแยกบน macOS, Flash Drive จริง, Ollama จริง และ Cloud API จริงก่อนสาธิต Final
 
-ใช้ 4 หน้า Dashboard, Backup, Tag, Search และโครง UI ของเรา
-แยก `model`, `repository`, `service`, `backup`, `analysis` ตามหน้าที่
-วิเคราะห์แค่สีหลักหนึ่ง Tag และเก็บความสัมพันธ์ผ่าน `tags/photo_tags`
-ค้นจากชื่อไฟล์ร่วมกับการคลิก Tag แบบใดสีหนึ่งตรงก็แสดง
-การย้ายรูปเป็นขั้นตอนตามลำดับเพื่อให้อ่านและอธิบายโค้ดได้ง่าย
+## งาน Performance ที่แยกไว้
 
-## Checklist ก่อนนำเสนอ
-
-ผลทดสอบต้องอ้างอิงหลังปรับพฤติกรรมรอบนี้ ไม่ใช้ผล build ของเวอร์ชันก่อน
-
-- รัน `go test ./...` และ `go vet ./...` จาก `photo-backup/`
-- สร้าง bindings ด้วย `wails generate module`
-- รัน `npm run typecheck` และ `npm run generate` ใน `frontend/`
-- รัน `wails build` และเปิดไฟล์ใน `build/bin/` บน Windows
-- ทดลองย้ายรูปชุดทดสอบ ตรวจต้นทางหาย ปลายทางครบ และ SQLite มีข้อมูล
-- ทดลองค้นชื่อ เลือกหลายสี ยกเลิกทุกสี และลบ Tag
-
-การ build ผ่านไม่ยืนยันว่าได้กดทุกปุ่มในหน้าต่าง native หรือทดสอบบน macOS แล้ว
-
-## ผลตรวจรอบปรับการย้ายไฟล์และค้นหา (17 ตุลาคม 2026)
-
-- `go test ./...`, `go vet ./...`, Nuxt typecheck และ Windows build ผ่าน
-- ทดสอบย้ายรูปจริงในโฟลเดอร์ชั่วคราวพร้อม SQLite: ต้นทางหาย ข้อมูลปลายทางครบ โฟลเดอร์ย่อยและไฟล์ชื่อซ้ำถูกต้อง
-- ทดสอบ DB ล้มเหลว ลบต้นทางไม่ได้ การลองใหม่ ไฟล์ถูกแก้ และปลายทางหาย โดยไม่ลบต้นทางก่อนงานพร้อม
-- ทดสอบหน้าเว็บด้วยข้อมูลตัวอย่าง: ไม่เลือก Tag แสดงทั้งหมด เลือกหนึ่งสี เลือกเพิ่มอีกสี และกดซ้ำเพื่อยกเลิก โดยไม่มีแถบเลือกโหมด
-- ตรวจ source และ build แล้วไม่พบ component หรือ state ของแถบ AND/OR ที่เลิกใช้
-
-การทดสอบ symlink แบบ integration ถูกข้ามเพราะสิทธิ์ Windows ส่วนโค้ดตรวจไฟล์ปลายทางด้วย `os.Lstat`
-การทดสอบรอบนี้ใช้ไฟล์ชั่วคราวและรูปตัวอย่าง ไม่ได้ย้ายรูปจริงของผู้ใช้
+Search Pagination, Virtual Scrolling และ Persistent Thumbnail ยังไม่รวมใน AI Pipeline นี้
+ควรทำเป็นงานถัดไปหลังตรวจความถูกต้องของ Backup, Hash, Cache และ Queue แล้ว

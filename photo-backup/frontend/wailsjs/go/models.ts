@@ -104,6 +104,7 @@ export namespace main {
 	    backedUpAt: string;
 	    thumbnail: string;
 	    colorTag: string;
+	    description: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PhotoSummary(source);
@@ -117,6 +118,7 @@ export namespace main {
 	        this.backedUpAt = source["backedUpAt"];
 	        this.thumbnail = source["thumbnail"];
 	        this.colorTag = source["colorTag"];
+	        this.description = source["description"];
 	    }
 	}
 	export class TagCloudItem {
@@ -156,6 +158,7 @@ export namespace main {
 	    backedUpAt: string;
 	    thumbnail: string;
 	    colorTag: string;
+	    description: string;
 	    tags: TagSummary[];
 	
 	    static createFrom(source: any = {}) {
@@ -170,6 +173,7 @@ export namespace main {
 	        this.backedUpAt = source["backedUpAt"];
 	        this.thumbnail = source["thumbnail"];
 	        this.colorTag = source["colorTag"];
+	        this.description = source["description"];
 	        this.tags = this.convertValues(source["tags"], TagSummary);
 	    }
 	
@@ -190,6 +194,49 @@ export namespace main {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace service {
+	
+	export class AIProviderStatus {
+	    provider: string;
+	    model: string;
+	    state: string;
+	    message: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIProviderStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.model = source["model"];
+	        this.state = source["state"];
+	        this.message = source["message"];
+	    }
+	}
+	export class AIQueueStatus {
+	    queued: number;
+	    processing: number;
+	    completed: number;
+	    failed: number;
+	    retryWait: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new AIQueueStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.queued = source["queued"];
+	        this.processing = source["processing"];
+	        this.completed = source["completed"];
+	        this.failed = source["failed"];
+	        this.retryWait = source["retryWait"];
+	    }
 	}
 
 }

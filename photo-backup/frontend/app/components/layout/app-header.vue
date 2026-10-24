@@ -8,8 +8,29 @@
       <NuxtLink to="/tags">Tag</NuxtLink>
       <NuxtLink to="/search">Search</NuxtLink>
     </nav>
+
+    <NuxtLink v-if="backupRunning" class="backup-status" to="/backup">
+      <span class="status-dot"></span>
+      Backup {{ progressPercent }}% · {{ progressCurrent }}/{{ progressTotal }} · {{ elapsedLabel }}
+    </NuxtLink>
+    <NuxtLink v-else-if="backupDone" class="backup-status done" to="/backup">
+      ✓ Backup เสร็จแล้ว · {{ elapsedLabel }}
+    </NuxtLink>
   </header>
 </template>
+
+<script setup lang="ts">
+import { useBackupStatus } from "~/composables/useBackup";
+
+const {
+  backupRunning,
+  backupDone,
+  progressCurrent,
+  progressTotal,
+  progressPercent,
+  elapsedLabel,
+} = useBackupStatus();
+</script>
 
 <style scoped>
 .header {
@@ -46,6 +67,39 @@
   color: #1d4ed8;
 }
 
+.backup-status {
+  align-items: center;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  color: #1d4ed8;
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 700;
+  gap: 7px;
+  padding: 7px 11px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.backup-status.done {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.status-dot {
+  animation: pulse 1.2s infinite;
+  background: #2563eb;
+  border-radius: 50%;
+  height: 8px;
+  width: 8px;
+}
+
+@keyframes pulse {
+  50% { opacity: 0.35; }
+}
+
 @media (max-width: 700px) {
   .header {
     align-items: flex-start;
@@ -55,6 +109,10 @@
 
   .menu {
     flex-wrap: wrap;
+  }
+
+  .backup-status {
+    white-space: normal;
   }
 }
 </style>

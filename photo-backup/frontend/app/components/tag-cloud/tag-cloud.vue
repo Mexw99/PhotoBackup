@@ -100,6 +100,9 @@ function tagStyle(count: number) {
   align-items: center;
   gap: 10px;
   padding: 8px 0;
+  max-height: 280px;
+  overflow-y: auto;
+  align-content: flex-start;
 }
 
 .tag-item {

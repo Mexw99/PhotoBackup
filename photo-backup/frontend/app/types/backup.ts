@@ -23,3 +23,18 @@ export interface BackupProgress {
   total: number;
   name: string;
 }
+
+export interface AIQueueStatus {
+  queued: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  retryWait: number;
+}
+
+export interface AIProviderStatus {
+  provider: string;
+  model: string;
+  state: string;
+  message: string;
+}

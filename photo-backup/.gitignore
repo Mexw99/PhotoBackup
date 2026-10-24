@@ -4,3 +4,20 @@ frontend/dist
 frontend/node_modules*
 *.install-failed*
 .cache/
+photo-backup.db
+config.json
+.venv-yolo/
+runs/
+*.pt
+*.onnx
+build/yolo_worker/
+dist/
+yolo_worker.spec
+photo-backup.db-*
+
+# Portable local AI assets intentionally committed for development/testing.
+!models/
+!models/yolo11n.pt
+!tools/bin/
+!tools/bin/windows/
+!tools/bin/windows/yolo_worker.exe

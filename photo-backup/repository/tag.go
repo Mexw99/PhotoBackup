@@ -10,22 +10,40 @@ import (
 )
 
 func (r *Repository) CreateTag(name string) (*model.Tag, error) {
-	name = strings.TrimSpace(name)
+	name = normalizeTagName(name)
 
 	if name == "" {
 		return nil, ErrEmptyTagName
 	}
 
-	tag := &model.Tag{
-		Name: name,
+	return findOrCreateTag(r.db, name)
+}
+
+func normalizeTagName(name string) string {
+	return strings.Join(strings.Fields(strings.TrimSpace(name)), " ")
+}
+
+func findOrCreateTag(db *gorm.DB, name string) (*model.Tag, error) {
+	var tag model.Tag
+	err := db.Where("LOWER(name) = LOWER(?)", name).First(&tag).Error
+	if err == nil {
+		return &tag, nil
 	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	tag.Name = name
+	return &tag, db.Create(&tag).Error
+}
 
-	err := r.db.
-		Where("name = ?", name).
-		FirstOrCreate(tag).
-		Error
-
-	return tag, err
+func appendPhotoTag(db *gorm.DB, photoID, tagID uint, source string) error {
+	if source == "" {
+		source = "user"
+	}
+	// Use the explicit three-column key. GORM's many-to-many helper knows
+	// about the legacy two-column join table and can otherwise default source
+	// back to "user" when inserting an AI or color relationship.
+	return db.Exec("INSERT OR IGNORE INTO photo_tags (photo_id, tag_id, source) VALUES (?, ?, ?)", photoID, tagID, source).Error
 }
 
 func (r *Repository) ListTags() ([]model.Tag, error) {
@@ -64,7 +82,7 @@ type TagCount struct {
 
 // เพิ่ม Tag เดียวให้รูปหลายรูป และบันทึกความสัมพันธ์ใน photo_tags
 func (r *Repository) AddTagToPhotos(photoIDs []uint, name string) (*model.Tag, error) {
-	name = strings.TrimSpace(name)
+	name = normalizeTagName(name)
 	if name == "" {
 		return nil, ErrEmptyTagName
 	}
@@ -85,11 +103,12 @@ func (r *Repository) AddTagToPhotos(photoIDs []uint, name string) (*model.Tag, e
 	var tag model.Tag
 
 	err := r.db.Transaction(func(tx *gorm.DB) error {
-		// FirstOrCreate ป้องกันการสร้าง Tag ชื่อซ้ำ
-		if err := tx.Where("name = ?", name).
-			FirstOrCreate(&tag, model.Tag{Name: name}).Error; err != nil {
+		// ใช้ Tag เดิมเมื่อชื่อเหมือนกันโดยไม่สนใจตัวพิมพ์และช่องว่างซ้ำ
+		createdTag, err := findOrCreateTag(tx, name)
+		if err != nil {
 			return err
 		}
+		tag = *createdTag
 
 		var photos []model.Photo
 		if err := tx.Where("id IN ?", uniqueIDs).Find(&photos).Error; err != nil {
@@ -99,7 +118,12 @@ func (r *Repository) AddTagToPhotos(photoIDs []uint, name string) (*model.Tag, e
 			return ErrPhotoNotFound
 		}
 
-		return tx.Model(&tag).Association("Photos").Append(&photos)
+		for _, photo := range photos {
+			if err := appendPhotoTag(tx, photo.ID, tag.ID, "user"); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -127,7 +151,7 @@ func (r *Repository) RemoveTagFromPhoto(photoID, tagID uint) error {
 	}
 
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&photo).Association("Tags").Delete(&tag); err != nil {
+		if err := tx.Where("photo_id = ? AND tag_id = ? AND source IN ?", photo.ID, tag.ID, []string{"user", "color"}).Delete(&model.PhotoTag{}).Error; err != nil {
 			return err
 		}
 		if photo.ColorTag == tag.Name {
@@ -148,7 +172,7 @@ func (r *Repository) DeleteTag(tagID uint) error {
 			return err
 		}
 
-		if err := tx.Model(&tag).Association("Photos").Clear(); err != nil {
+		if err := tx.Where("tag_id = ?", tag.ID).Delete(&model.PhotoTag{}).Error; err != nil {
 			return err
 		}
 		// ล้างชื่อสีที่เก็บไว้ด้วย ไม่ให้ UI แสดงแท็กที่ถูกลบไปแล้ว

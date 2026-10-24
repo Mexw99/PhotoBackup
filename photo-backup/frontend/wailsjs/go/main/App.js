@@ -10,6 +10,14 @@ export function DeleteTag(arg1) {
   return window['go']['main']['App']['DeleteTag'](arg1);
 }
 
+export function GetAIProviderStatus() {
+  return window['go']['main']['App']['GetAIProviderStatus']();
+}
+
+export function GetAIQueueStatus() {
+  return window['go']['main']['App']['GetAIQueueStatus']();
+}
+
 export function GetBackupFolder() {
   return window['go']['main']['App']['GetBackupFolder']();
 }

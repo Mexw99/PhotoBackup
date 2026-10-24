@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,17 @@ import (
 
 // ป้องกันกดสำรองซ้อนกันระหว่างที่ยังทำงานกับไฟล์ชุดเดิม
 var backupLock sync.Mutex
+
+// SQLite เขียน transaction พร้อมกันหลายตัวได้ไม่ดีนัก โดยเฉพาะตอนใช้กับ
+// Flash Drive จึงล็อกเฉพาะช่วง SaveBackup ส่วนการอ่าน/วิเคราะห์/คัดลอกยังทำพร้อมกันได้
+var backupDatabaseLock sync.Mutex
+
+type backupOutcome struct {
+	index  int
+	image  backup.ImageFile
+	result backup.BackupResult
+	err    error
+}
 
 func ListImageFiles(sourcePath string) ([]backup.ImageFile, error) {
 	return backup.DiscoverImages(sourcePath)
@@ -28,7 +40,7 @@ func DefaultBackupFolder() string {
 	return filepath.Join(home, "PhotoBackup")
 }
 
-// StartBackup: ตรวจโฟลเดอร์ → ดูสี → เตรียมปลายทาง → บันทึก DB → ลบต้นทาง
+// StartBackup: ตรวจโฟลเดอร์ → ตรวจไฟล์รูป → คัดลอก → verify → hash/บันทึก DB → สร้าง AI Job → ลบต้นทาง
 func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.ProgressCallback) (backup.BackupSummary, error) {
 	if !backupLock.TryLock() {
 		return backup.BackupSummary{}, fmt.Errorf("กำลังสำรองรูปภาพอยู่ กรุณารอให้เสร็จก่อน")
@@ -50,21 +62,63 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 		return backup.BackupSummary{}, err
 	}
 
-	summary := backup.BackupSummary{Total: len(images), Results: make([]backup.BackupResult, 0, len(images))}
-	for index, image := range images {
-		result, err := s.backupPhoto(image, sourcePath, destPath)
-		if err != nil {
+	summary := backup.BackupSummary{
+		Total:   len(images),
+		Results: make([]backup.BackupResult, len(images)),
+	}
+
+	// ทำงานพร้อมกันจำนวนจำกัด เพื่อไม่เปิดไฟล์/ใช้ดิสก์มากเกินไป
+	workerCount := runtime.NumCPU()
+	if workerCount < 2 {
+		workerCount = 2
+	}
+	if workerCount > 4 {
+		workerCount = 4
+	}
+	if workerCount > len(images) {
+		workerCount = len(images)
+	}
+
+	jobs := make(chan int)
+	outcomes := make(chan backupOutcome, workerCount)
+	var workers sync.WaitGroup
+	for worker := 0; worker < workerCount; worker++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				image := images[index]
+				result, err := s.backupPhoto(image, sourcePath, destPath)
+				outcomes <- backupOutcome{index: index, image: image, result: result, err: err}
+			}
+		}()
+	}
+
+	go func() {
+		for index := range images {
+			jobs <- index
+		}
+		close(jobs)
+		workers.Wait()
+		close(outcomes)
+	}()
+
+	completed := 0
+	for outcome := range outcomes {
+		result := outcome.result
+		if outcome.err != nil {
 			result.Success = false
-			result.Error = err.Error()
+			result.Error = outcome.err.Error()
 			summary.Failed++
 		} else if result.Skipped {
 			summary.Skipped++
 		} else {
 			summary.Success++
 		}
-		summary.Results = append(summary.Results, result)
+		summary.Results[outcome.index] = result
+		completed++
 		if onProgress != nil {
-			onProgress(index+1, len(images), image.Name)
+			onProgress(completed, len(images), outcome.image.Name)
 		}
 	}
 	return summary, nil
@@ -89,6 +143,21 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 			return result, err
 		}
 		if equal {
+			// รูปเดิมไม่ต้องคัดลอกซ้ำ แต่เติม Hash จากไฟล์ปลายทางได้
+			if previous.ContentHash == nil {
+				hash, hashErr := analysis.SHA256File(previous.BackupPath)
+				if hashErr != nil {
+					return result, hashErr
+				}
+				updateStore, updateCancel := s.operation()
+				hashErr = updateStore.UpdatePhotoContentHash(previous.ID, &hash)
+				updateCancel()
+				if hashErr != nil {
+					return result, hashErr
+				}
+				previous.ContentHash = &hash
+			}
+			s.enqueueAIJob(previous.ID, previous.ContentHash)
 			result.BackupPath = previous.BackupPath
 			if err := s.finishMove(image.Path, result.BackupPath, info); err != nil {
 				return result, err
@@ -98,8 +167,7 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 		}
 	}
 
-	colorTag, err := analysis.DetectColor(image.Path)
-	if err != nil {
+	if err := analysis.ValidateImage(image.Path); err != nil {
 		return result, err
 	}
 	relative, err := filepath.Rel(sourcePath, image.Path)
@@ -110,6 +178,13 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 	if err != nil {
 		return result, err
 	}
+	// Hash หลัง CopyImage ตรวจ byte เทียบกับต้นฉบับแล้ว จึงใช้เป็น identity ของเนื้อหาได้
+	contentHash, err := analysis.SHA256File(result.BackupPath)
+	if err != nil {
+		_ = os.Remove(result.BackupPath)
+		result.BackupPath = ""
+		return result, fmt.Errorf("คำนวณ ContentHash ของไฟล์ปลายทางไม่ได้: %w", err)
+	}
 	photo := &model.Photo{
 		OriginalName:     image.Name,
 		OriginalPath:     image.Path,
@@ -117,17 +192,22 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 		FileSize:         image.Size,
 		SourceModifiedAt: info.ModTime(),
 		BackedUpAt:       time.Now(),
-		ColorTag:         colorTag,
+		ContentHash:      &contentHash,
 	}
+	// ให้ขั้นตอนหนัก ๆ ทำพร้อมกันได้ แต่ให้ SQLite เขียนทีละ transaction
+	backupDatabaseLock.Lock()
 	store, cancel = s.operation()
 	err = store.SaveBackup(photo)
 	cancel()
+	backupDatabaseLock.Unlock()
 	if err != nil {
 		// หาก DB บันทึกไม่ได้ ลบเฉพาะสำเนาที่เพิ่งสร้าง และเก็บต้นฉบับไว้
 		_ = os.Remove(result.BackupPath)
 		result.BackupPath = ""
 		return result, fmt.Errorf("บันทึกข้อมูลรูปไม่ได้: %w", err)
 	}
+	// AI เป็นงานเสริม: ถ้าสร้าง Job ไม่สำเร็จ Backup ยังถือว่าสำเร็จ
+	s.enqueueAIJob(photo.ID, photo.ContentHash)
 	if err := s.finishMove(image.Path, result.BackupPath, info); err != nil {
 		return result, err
 	}

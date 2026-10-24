@@ -37,8 +37,9 @@ func (a *App) GetRecentPhotos(limit int) []PhotoSummary {
 			OriginalName: photo.OriginalName,
 			BackupPath:   photo.BackupPath,
 			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
-			Thumbnail:    service.ReadImageDataURL(photo.BackupPath),
+			Thumbnail:    service.ReadThumbnailDataURL(photo.BackupPath),
 			ColorTag:     photo.ColorTag,
+			Description:  photo.Description,
 		})
 	}
 	return result
@@ -90,8 +91,9 @@ func taggedPhotoSummaries(photos []model.Photo) []TaggedPhotoSummary {
 			OriginalName: photo.OriginalName,
 			BackupPath:   photo.BackupPath,
 			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
-			Thumbnail:    service.ReadImageDataURL(photo.BackupPath),
+			Thumbnail:    service.ReadThumbnailDataURL(photo.BackupPath),
 			ColorTag:     photo.ColorTag,
+			Description:  photo.Description,
 			Tags:         tags,
 		})
 	}

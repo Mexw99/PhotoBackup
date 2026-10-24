@@ -22,7 +22,6 @@
         <div class="photo-info">
           <strong>{{ photo.originalName }}</strong>
           <small>{{ photo.backedUpAt }}</small>
-          <small v-if="photo.colorTag">สีหลัก: {{ photo.colorTag }}</small>
           <small class="path">{{ photo.backupPath }}</small>
         </div>
         <div class="photo-tags">

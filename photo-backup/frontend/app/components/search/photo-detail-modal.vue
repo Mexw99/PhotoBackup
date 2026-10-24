@@ -50,8 +50,10 @@
           </div>
 
           <div class="detail-row">
-            <span class="detail-label">สีหลักจากรูปภาพ:</span>
-            <span class="detail-value">{{ photo.colorTag || "ยังไม่ได้วิเคราะห์สี" }}</span>
+            <span class="detail-label">คำอธิบายภาพจาก AI:</span>
+            <span class="detail-value description-value">
+              {{ photo.description || "ยังไม่มีคำอธิบายจาก AI" }}
+            </span>
           </div>
 
           <div class="detail-row">

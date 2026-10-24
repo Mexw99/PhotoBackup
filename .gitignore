@@ -1,0 +1,5 @@
+# Local recovery snapshots created by development tools.
+_codex-backup-*/
+
+# Runtime output outside the application directory.
+runs/

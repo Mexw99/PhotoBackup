@@ -56,16 +56,35 @@ func (r *Repository) SaveBackup(photo *model.Photo) error {
 			// เมื่อไฟล์สำเนาหาย ใช้แถวเดิมและคงแท็กที่ผู้ใช้เพิ่มไว้
 			photo.ID = previous.ID
 			previousColor := previous.ColorTag
-			if err := tx.Model(&previous).Updates(map[string]interface{}{
+			colorTag := photo.ColorTag
+			if colorTag == "" {
+				colorTag = previousColor
+			}
+			updates := map[string]interface{}{
 				"file_size": photo.FileSize, "source_modified_at": photo.SourceModifiedAt,
-				"backed_up_at": photo.BackedUpAt, "color_tag": photo.ColorTag,
-			}).Error; err != nil {
+				"backed_up_at": photo.BackedUpAt, "color_tag": colorTag,
+			}
+			contentChanged := photo.ContentHash != nil && previous.ContentHash != nil && *photo.ContentHash != *previous.ContentHash
+			if strings.TrimSpace(photo.Description) != "" || contentChanged {
+				updates["description"] = photo.Description
+			}
+			if photo.ContentHash != nil && strings.TrimSpace(*photo.ContentHash) != "" {
+				updates["content_hash"] = photo.ContentHash
+			}
+			// Update the table model without passing the preloaded Tags slice to
+			// GORM association callbacks; provenance is managed explicitly below.
+			if err := tx.Model(&model.Photo{}).Where("id = ?", previous.ID).Updates(updates).Error; err != nil {
 				return err
 			}
-			if previousColor != "" && previousColor != photo.ColorTag {
+			if contentChanged {
+				if err := tx.Where("photo_id = ? AND source = ?", previous.ID, "ai").Delete(&model.PhotoTag{}).Error; err != nil {
+					return err
+				}
+			}
+			if previousColor != "" && previousColor != colorTag {
 				for _, tag := range previous.Tags {
 					if tag.Name == previousColor {
-						if err := tx.Model(&previous).Association("Tags").Delete(&tag); err != nil {
+						if err := tx.Where("photo_id = ? AND tag_id = ? AND source = ?", previous.ID, tag.ID, "color").Delete(&model.PhotoTag{}).Error; err != nil {
 							return err
 						}
 					}
@@ -78,7 +97,7 @@ func (r *Repository) SaveBackup(photo *model.Photo) error {
 				FirstOrCreate(&tag, model.Tag{Name: photo.ColorTag}).Error; err != nil {
 				return err
 			}
-			if err := tx.Model(photo).Association("Tags").Append(&tag); err != nil {
+			if err := appendPhotoTag(tx, photo.ID, tag.ID, "color"); err != nil {
 				return err
 			}
 		}
@@ -87,6 +106,40 @@ func (r *Repository) SaveBackup(photo *model.Photo) error {
 			Status: "backed_up",
 		}
 		return tx.Create(&history).Error
+	})
+}
+
+// SaveAIAnalysis stores the AI description and associates the generated tags
+// with a photo in one transaction.
+func (r *Repository) SaveAIAnalysis(photoID uint, description string, tagNames []string) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		var photo model.Photo
+		if err := tx.First(&photo, photoID).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&photo).Update("description", strings.TrimSpace(description)).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("photo_id = ? AND source = ?", photo.ID, "ai").Delete(&model.PhotoTag{}).Error; err != nil {
+			return err
+		}
+		seen := make(map[string]bool)
+		for _, name := range tagNames {
+			name = strings.TrimSpace(name)
+			key := strings.ToLower(name)
+			if name == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			var tag model.Tag
+			if err := tx.Where("name = ?", name).FirstOrCreate(&tag, model.Tag{Name: name}).Error; err != nil {
+				return err
+			}
+			if err := appendPhotoTag(tx, photo.ID, tag.ID, "ai"); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

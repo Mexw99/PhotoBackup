@@ -1,0 +1,14 @@
+{
+  "aiProvider": "ollama",
+  "geminiApiKeys": "",
+  "geminiModel": "gemini-2.5-flash",
+  "openaiApiKeys": "",
+  "openaiModel": "gpt-4.1-mini",
+  "ollamaUrl": "http://127.0.0.1:11434",
+  "ollamaModel": "qwen2.5vl:3b",
+  "yoloEnabled": "true",
+  "yoloModelPath": "models/yolo11n.pt",
+  "yoloPython": "",
+  "yoloScript": "tools/yolo_worker.py",
+  "yoloWorker": "tools/bin/windows/yolo_worker.exe"
+}
