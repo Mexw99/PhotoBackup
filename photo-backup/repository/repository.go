@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -16,7 +17,15 @@ type Store interface {
 	WithContext(context.Context) Store
 	CreatePhoto(*model.Photo) error
 	FindBackup(string, string) (*model.Photo, error)
+	BackupPathsInDestination(string) ([]string, error)
+	PhotosInDestination(string) ([]model.Photo, error)
 	SaveBackup(*model.Photo) error
+	GetPhoto(uint) (*model.Photo, error)
+	PendingAnalysisPhotoIDs() ([]uint, error)
+	FailedAnalysisPhotoIDs() ([]uint, error)
+	SetPhotoAnalysisStatus(uint, string, string) error
+	SavePhotoAnalysis(uint, string, []string, string, time.Time) error
+	AnalysisCounts() (AnalysisCounts, error)
 	GetSettings() (model.Setting, error)
 	SaveSettings(string, string) error
 	ListPhotos() ([]model.Photo, error)

@@ -6,8 +6,16 @@ export function AddTagToPhotos(arg1, arg2) {
   return window['go']['main']['App']['AddTagToPhotos'](arg1, arg2);
 }
 
+export function CheckBackup(arg1) {
+  return window['go']['main']['App']['CheckBackup'](arg1);
+}
+
 export function DeleteTag(arg1) {
   return window['go']['main']['App']['DeleteTag'](arg1);
+}
+
+export function GetAnalysisStatus() {
+  return window['go']['main']['App']['GetAnalysisStatus']();
 }
 
 export function GetBackupFolder() {
@@ -64,6 +72,10 @@ export function ListImageFiles(arg1) {
 
 export function RemoveTagFromPhoto(arg1, arg2) {
   return window['go']['main']['App']['RemoveTagFromPhoto'](arg1, arg2);
+}
+
+export function RetryFailedAnalysis() {
+  return window['go']['main']['App']['RetryFailedAnalysis']();
 }
 
 export function SaveBackupSettings(arg1, arg2) {

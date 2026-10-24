@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"photo-backup/database"
 	"photo-backup/model"
@@ -21,7 +22,7 @@ func newMoveService(t *testing.T) (*Service, *database.Database) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	return New(repository.New(db.GORM())), db
+	return NewWithAnalyzer(repository.New(db.GORM()), nil), db
 }
 
 func writeMovePhoto(t *testing.T, path string) []byte {
@@ -65,6 +66,31 @@ func TestMoveDatabaseFailureKeepsSourceAndRemovesNewCopy(t *testing.T) {
 	photos, err := s.ListPhotos()
 	if err != nil || len(photos) != 0 {
 		t.Fatalf("database failure left photo rows: %+v, %v", photos, err)
+	}
+}
+
+func TestMoveSkipsDestinationRecordedInDatabase(t *testing.T) {
+	s, db := newMoveService(t)
+	source, destination := t.TempDir(), t.TempDir()
+	path := filepath.Join(source, "red.png")
+	writeMovePhoto(t, path)
+	expectedDestination := filepath.Join(destination, "red.png")
+	if err := db.GORM().Create(&model.Photo{
+		OriginalName: "red.png", OriginalPath: "another-source/red.png",
+		BackupPath: expectedDestination, FileSize: 10, BackedUpAt: time.Now(),
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := s.StartBackup(source, destination, nil)
+	if err != nil || summary.Success != 0 || summary.Skipped != 1 {
+		t.Fatalf("database duplicate: %+v, %v", summary, err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("source should remain: %v", err)
+	}
+	if summary.Results[0].Message == "" {
+		t.Fatal("database duplicate should explain why it was skipped")
 	}
 }
 

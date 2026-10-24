@@ -58,3 +58,10 @@ func (a *App) StartBackup(sourcePath, destPath string) (backup.BackupSummary, er
 		})
 	})
 }
+
+func (a *App) CheckBackup(destPath string) ([]backup.IntegrityResult, error) {
+	if a.service == nil {
+		return nil, fmt.Errorf("database is not connected")
+	}
+	return a.service.CheckBackup(destPath)
+}

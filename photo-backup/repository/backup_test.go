@@ -11,7 +11,7 @@ import (
 	"photo-backup/repository"
 )
 
-func TestSaveBackupPersistsPhotoHistoryAndColorTag(t *testing.T) {
+func TestSaveBackupPersistsPhotoHistoryAndAIAnalysis(t *testing.T) {
 	db, err := database.OpenAt(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -22,17 +22,21 @@ func TestSaveBackupPersistsPhotoHistoryAndColorTag(t *testing.T) {
 		OriginalName: "sample.jpg", OriginalPath: "source/sample.jpg",
 		BackupPath: filepath.Join("backup", "sample_2.jpg"),
 		FileSize:   20, BackedUpAt: time.Now(), SourceModifiedAt: time.Now(),
-		ColorTag: "สีแดง",
 	}
 	if err := repo.SaveBackup(&photo); err != nil {
 		t.Fatal(err)
 	}
 	photos, err := repo.ListPhotos()
-	if err != nil || len(photos) != 1 || len(photos[0].Tags) != 1 {
+	if err != nil || len(photos) != 1 || len(photos[0].Tags) != 0 || photos[0].AnalysisStatus != model.AnalysisPending {
 		t.Fatalf("saved photos: %+v, %v", photos, err)
 	}
-	if photos[0].ColorTag != "สีแดง" || photos[0].Tags[0].Name != "สีแดง" {
-		t.Fatalf("color tag was not saved: %+v", photos[0])
+	analyzedAt := time.Now()
+	if err := repo.SavePhotoAnalysis(photo.ID, "ภาพตัวอย่าง", []string{"ตัวอย่าง", "รูปภาพ"}, "hash", analyzedAt); err != nil {
+		t.Fatal(err)
+	}
+	photos, err = repo.ListPhotos()
+	if err != nil || len(photos) != 1 || photos[0].Description != "ภาพตัวอย่าง" || photos[0].AnalysisStatus != model.AnalysisCompleted || len(photos[0].Tags) != 2 {
+		t.Fatalf("AI analysis was not saved: %+v, %v", photos, err)
 	}
 	var history []model.FileRecord
 	if err := db.GORM().Find(&history).Error; err != nil {
@@ -70,7 +74,6 @@ func TestFindBackupUsesHistoryForSelectedDestination(t *testing.T) {
 			first = photo
 		}
 	}
-	// กลับไปเลือก A ต้องพบประวัติ A แม้ว่าประวัติ B จะใหม่กว่า
 	found, err := repo.FindBackup(source, filepath.Join(base, "backup-A"))
 	if err != nil || found == nil || found.ID != first.ID {
 		t.Fatalf("history for backup-A: %+v, %v", found, err)
@@ -88,13 +91,12 @@ func TestSaveBackupRollsBackWhenHistoryCannotBeSaved(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	repo := repository.New(db.GORM())
-	// ทำให้ขั้นตอนสุดท้ายล้มเหลว เพื่อตรวจว่า photo และ tag ไม่ค้างในฐานข้อมูล
 	if err := db.GORM().Migrator().DropTable(&model.FileRecord{}); err != nil {
 		t.Fatal(err)
 	}
 	photo := model.Photo{
 		OriginalName: "sample.jpg", OriginalPath: "source/sample.jpg",
-		BackupPath: "backup/sample.jpg", BackedUpAt: time.Now(), ColorTag: "สีฟ้า",
+		BackupPath: "backup/sample.jpg", BackedUpAt: time.Now(),
 	}
 	if err := repo.SaveBackup(&photo); err == nil {
 		t.Fatal("expected history write to fail")
@@ -117,7 +119,7 @@ func TestSaveBackupRepairsExistingPathAndKeepsUserEdits(t *testing.T) {
 	original := model.Photo{
 		OriginalName: "sample.jpg", OriginalPath: "source/sample.jpg",
 		BackupPath: "backup/sample.jpg", BackedUpAt: now, SourceModifiedAt: now,
-		FileSize: 10, ColorTag: "สีแดง",
+		FileSize: 10,
 	}
 	if err := repo.SaveBackup(&original); err != nil {
 		t.Fatal(err)
@@ -129,7 +131,6 @@ func TestSaveBackupRepairsExistingPathAndKeepsUserEdits(t *testing.T) {
 		OriginalName: original.OriginalName, OriginalPath: original.OriginalPath,
 		BackupPath: original.BackupPath, FileSize: 25,
 		BackedUpAt: now.Add(time.Hour), SourceModifiedAt: now.Add(time.Minute),
-		ColorTag: "สีเขียว",
 	}
 	if err := repo.SaveBackup(&repaired); err != nil {
 		t.Fatal(err)
@@ -142,15 +143,11 @@ func TestSaveBackupRepairsExistingPathAndKeepsUserEdits(t *testing.T) {
 	if photo.ID != original.ID || repaired.ID != original.ID {
 		t.Fatalf("repair replaced user data: %+v", photo)
 	}
-	if photo.FileSize != 25 || !photo.SourceModifiedAt.Equal(repaired.SourceModifiedAt) || !photo.BackedUpAt.Equal(repaired.BackedUpAt) || photo.ColorTag != "สีเขียว" {
+	if photo.FileSize != 25 || !photo.SourceModifiedAt.Equal(repaired.SourceModifiedAt) || !photo.BackedUpAt.Equal(repaired.BackedUpAt) || photo.AnalysisStatus != model.AnalysisPending || photo.Description != "" {
 		t.Fatalf("repair metadata: %+v", photo)
 	}
-	names := make(map[string]bool)
-	for _, tag := range photo.Tags {
-		names[tag.Name] = true
-	}
-	if len(names) != 2 || !names["family"] || !names["สีเขียว"] || names["สีแดง"] {
-		t.Fatalf("repair tags: %+v", photo.Tags)
+	if len(photo.Tags) != 1 || photo.Tags[0].Name != "family" {
+		t.Fatalf("repair removed user tag: %+v", photo.Tags)
 	}
 	var historyCount int64
 	if err := db.GORM().Model(&model.FileRecord{}).Count(&historyCount).Error; err != nil {
@@ -162,14 +159,10 @@ func TestSaveBackupRepairsExistingPathAndKeepsUserEdits(t *testing.T) {
 
 	otherSource := model.Photo{
 		OriginalName: "other.jpg", OriginalPath: "other/other.jpg",
-		BackupPath: original.BackupPath, BackedUpAt: time.Now(), ColorTag: "สีฟ้า",
+		BackupPath: original.BackupPath, BackedUpAt: time.Now(),
 	}
 	if err := repo.SaveBackup(&otherSource); !errors.Is(err, repository.ErrBackupPathConflict) {
 		t.Fatalf("different source must be rejected: %v", err)
-	}
-	photos, err = repo.ListPhotos()
-	if err != nil || len(photos) != 1 || photos[0].OriginalPath != original.OriginalPath || photos[0].ColorTag != "สีเขียว" {
-		t.Fatalf("conflict changed existing row: %+v, %v", photos, err)
 	}
 }
 
@@ -192,15 +185,14 @@ func TestSettingsUpdateOneRowAndFilenameSearch(t *testing.T) {
 	}
 	photo1 := createTestPhoto(t, repo, "beach.jpg")
 	photo2 := createTestPhoto(t, repo, "beach-holiday.jpg")
-	if _, err := repo.AddTagToPhotos([]uint{photo2.ID}, "สีเขียว"); err != nil {
+	if _, err := repo.AddTagToPhotos([]uint{photo2.ID}, "holiday"); err != nil {
 		t.Fatal(err)
 	}
 	found, err := repo.SearchPhotos("BEACH", nil)
 	if err != nil || len(found) != 2 {
 		t.Fatalf("filename search: %+v, %v", found, err)
 	}
-	// ชื่อไฟล์ต้องตรงกับคำค้นและมีแท็กที่เลือกด้วย
-	found, err = repo.SearchPhotos("BEACH", []string{"สีเขียว"})
+	found, err = repo.SearchPhotos("BEACH", []string{"holiday"})
 	if err != nil || len(found) != 1 || found[0].ID == photo1.ID {
 		t.Fatalf("text and tag search: %+v, %v", found, err)
 	}
@@ -210,39 +202,33 @@ func TestSettingsUpdateOneRowAndFilenameSearch(t *testing.T) {
 	}
 }
 
-func TestRemovingColorTagsClearsSavedColor(t *testing.T) {
+func TestRemovingTagOnlyRemovesThatAssociation(t *testing.T) {
 	repo := newTestRepository(t)
-	for _, name := range []string{"first.jpg", "second.jpg"} {
-		photo := model.Photo{
-			OriginalName: name, OriginalPath: "source/" + name,
-			BackupPath: "backup/" + name, BackedUpAt: time.Now(), ColorTag: "สีแดง",
-		}
-		if err := repo.SaveBackup(&photo); err != nil {
-			t.Fatal(err)
-		}
-	}
-	photos, err := repo.ListPhotos()
-	if err != nil || len(photos) != 2 {
-		t.Fatalf("saved photos: %+v, %v", photos, err)
-	}
-	tagID := photos[0].Tags[0].ID
-	if err := repo.RemoveTagFromPhoto(photos[0].ID, tagID); err != nil {
-		t.Fatal(err)
-	}
-	photos, err = repo.ListPhotos()
-	if err != nil || photos[0].ColorTag != "" || photos[1].ColorTag != "สีแดง" {
-		t.Fatalf("removed color from wrong photo: %+v, %v", photos, err)
-	}
-	if err := repo.DeleteTag(tagID); err != nil {
-		t.Fatal(err)
-	}
-	photos, err = repo.ListPhotos()
+	photo1 := createTestPhoto(t, repo, "first.jpg")
+	photo2 := createTestPhoto(t, repo, "second.jpg")
+	tag, err := repo.AddTagToPhotos([]uint{photo1.ID, photo2.ID}, "family")
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := repo.RemoveTagFromPhoto(photo1.ID, tag.ID); err != nil {
+		t.Fatal(err)
+	}
+	photos, err := repo.ListPhotos()
+	if err != nil || len(photos) != 2 {
+		t.Fatal(err)
+	}
 	for _, photo := range photos {
-		if photo.ColorTag != "" || len(photo.Tags) != 0 {
-			t.Fatalf("deleted color remains: %+v", photo)
+		if photo.ID == photo1.ID && len(photo.Tags) != 0 {
+			t.Fatalf("tag still belongs to first photo: %+v", photo.Tags)
 		}
+		if photo.ID == photo2.ID && (len(photo.Tags) != 1 || photo.Tags[0].Name != "family") {
+			t.Fatalf("second photo lost tag: %+v", photo.Tags)
+		}
+	}
+	if err := repo.DeleteTag(tag.ID); err != nil {
+		t.Fatal(err)
+	}
+	if count, _ := repo.CountTags(); count != 0 {
+		t.Fatalf("deleted tag remains: %d", count)
 	}
 }

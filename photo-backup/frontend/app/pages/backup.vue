@@ -91,6 +91,14 @@
         >
           {{ settingsSaving ? "กำลังบันทึก..." : "บันทึกโฟลเดอร์" }}
         </button>
+        <button
+          class="clear-button"
+          type="button"
+          :disabled="!destPath || backupRunning || loading || settingsSaving || integrityLoading"
+          @click="checkDestination"
+        >
+          {{ integrityLoading ? "กำลังตรวจสอบ..." : "ตรวจสอบไฟล์ปลายทาง" }}
+        </button>
         <span class="muted">ระบบจะบันทึกโฟลเดอร์ให้อีกครั้งเมื่อเริ่ม Backup</span>
       </div>
 
@@ -110,6 +118,27 @@
       <div v-if="loading" class="message">
         กำลังค้นหารูปภาพในโฟลเดอร์ย่อย...
       </div>
+    </section>
+
+    <section v-if="integrityDone" class="panel">
+      <div class="section-heading">
+        <h2>ผลตรวจสอบปลายทาง</h2>
+        <span class="count-badge">{{ integrityResults.length }}</span>
+      </div>
+      <div v-if="!integrityResults.length" class="empty-state">
+        ยังไม่มีประวัติรูปภาพใน Database สำหรับปลายทางนี้
+      </div>
+      <ul v-else class="file-list">
+        <li
+          v-for="result in integrityResults"
+          :key="result.path"
+          class="file-item"
+          :class="result.status === 'OK' ? 'success-item' : 'error-item'"
+        >
+          <span class="file-name">{{ result.filename }}</span>
+          <span class="file-size">[{{ result.status }}] {{ result.message }}</span>
+        </li>
+      </ul>
     </section>
 
     <!-- ======== รายการรูปภาพ ======== -->
@@ -174,7 +203,7 @@
         </div>
         <div class="result-card skipped">
           <strong>{{ backupSummary.skipped }}</strong>
-          <span>ใช้ไฟล์ปลายทางเดิม</span>
+          <span>ข้าม / แจ้งเตือน</span>
         </div>
         <div class="result-card error">
           <strong>{{ backupSummary.failed }}</strong>
@@ -183,7 +212,7 @@
       </div>
 
       <div v-if="backupDone && skippedResults.length > 0" class="skipped-list">
-        <h3>รูปที่ใช้ไฟล์ปลายทางเดิมและย้ายสำเร็จ:</h3>
+        <h3>รายการที่ข้ามหรือแจ้งเตือน:</h3>
         <ul class="file-list">
           <li
             v-for="result in skippedResults"
@@ -191,7 +220,7 @@
             class="file-item"
           >
             <span class="file-name">{{ result.originalName }}</span>
-            <span class="file-size">ตรวจไฟล์เดิมแล้ว ลบต้นทางสำเร็จ</span>
+            <span class="file-size">{{ result.message || "ข้ามรายการนี้" }}</span>
           </li>
         </ul>
       </div>
@@ -254,6 +283,9 @@ const {
   progressTotal,
   progressName,
   backupSummary,
+  integrityLoading,
+  integrityDone,
+  integrityResults,
   progressPercent,
   successResults,
   skippedResults,
@@ -265,6 +297,7 @@ const {
   clearDestFolder,
   saveSettings,
   startBackup,
+  checkDestination,
   formatBytes,
 } = useBackup();
 </script>
