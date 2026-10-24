@@ -114,8 +114,6 @@
               {{ photo.originalName }}
             </h3>
             <span class="photo-card-time">{{ photo.backedUpAt }}</span>
-            <span v-if="photo.description" class="photo-card-description">{{ photo.description }}</span>
-            <span class="photo-card-analysis">AI: {{ analysisStatusLabel(photo.analysisStatus) }}</span>
             <span class="photo-card-path" :title="photo.backupPath">
               {{ photo.backupPath }}
             </span>
@@ -180,15 +178,6 @@ const {
   toggleTag,
   openPhotoDetail,
 } = usePhotoSearch();
-
-function analysisStatusLabel(status: string) {
-  return {
-    pending: "รอวิเคราะห์",
-    processing: "กำลังวิเคราะห์",
-    completed: "วิเคราะห์แล้ว",
-    failed: "วิเคราะห์ไม่สำเร็จ",
-  }[status] || "รอวิเคราะห์";
-}
 </script>
 
 <style scoped>

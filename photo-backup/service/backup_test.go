@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"bytes"
 	"image"
 	"image/color"
 	"image/png"
@@ -143,28 +144,31 @@ func TestBackupReplacesMissingCopyAndDetectsChangedTime(t *testing.T) {
 	sourceMustBeGone(t, path)
 }
 
-func TestBackupMoveSkipsDuplicateDestination(t *testing.T) {
+func TestBackupMoveDoesNotOverwriteDestination(t *testing.T) {
 	s := newService(t)
 	source, destination := t.TempDir(), t.TempDir()
 	path := filepath.Join(source, "green.png")
 	writeSamplePhoto(t, path)
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
 	existing := filepath.Join(destination, "green.png")
 	if err := os.WriteFile(existing, []byte("existing file"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	summary, err := s.StartBackup(source, destination, nil)
-	if err != nil || summary.Success != 0 || summary.Skipped != 1 || summary.Results[0].BackupPath != "" {
+	if err != nil || summary.Success != 1 || summary.Results[0].BackupPath != filepath.Join(destination, "green (1).png") {
 		t.Fatalf("move with name collision: %+v, %v", summary, err)
 	}
-	if _, err := os.Stat(path); err != nil {
-		t.Fatalf("duplicate source should remain: %v", err)
-	}
+	sourceMustBeGone(t, path)
 	oldData, err := os.ReadFile(existing)
 	if err != nil || string(oldData) != "existing file" {
 		t.Fatalf("existing file overwritten: %q, %v", oldData, err)
 	}
-	if _, err := os.Stat(filepath.Join(destination, "green (1).png")); !os.IsNotExist(err) {
-		t.Fatalf("duplicate should not create a renamed copy: %v", err)
+	newData, err := os.ReadFile(summary.Results[0].BackupPath)
+	if err != nil || !bytes.Equal(newData, contents) {
+		t.Fatalf("moved data differs: %v", err)
 	}
 }
 

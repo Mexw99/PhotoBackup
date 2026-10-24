@@ -130,6 +130,9 @@ func (r *Repository) RemoveTagFromPhoto(photoID, tagID uint) error {
 		if err := tx.Model(&photo).Association("Tags").Delete(&tag); err != nil {
 			return err
 		}
+		if photo.ColorTag == tag.Name {
+			return tx.Model(&photo).Update("color_tag", "").Error
+		}
 		return nil
 	})
 }
@@ -146,6 +149,11 @@ func (r *Repository) DeleteTag(tagID uint) error {
 		}
 
 		if err := tx.Model(&tag).Association("Photos").Clear(); err != nil {
+			return err
+		}
+		// ล้างชื่อสีที่เก็บไว้ด้วย ไม่ให้ UI แสดงแท็กที่ถูกลบไปแล้ว
+		if err := tx.Model(&model.Photo{}).Where("color_tag = ?", tag.Name).
+			Update("color_tag", "").Error; err != nil {
 			return err
 		}
 		return tx.Delete(&tag).Error

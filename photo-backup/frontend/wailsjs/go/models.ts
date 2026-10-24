@@ -1,5 +1,5 @@
 export namespace backup {
-
+	
 	export class BackupResult {
 	    originalName: string;
 	    originalPath: string;
@@ -7,13 +7,12 @@ export namespace backup {
 	    fileSize: number;
 	    success: boolean;
 	    skipped: boolean;
-	    message: string;
 	    error: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BackupResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.originalName = source["originalName"];
@@ -22,7 +21,6 @@ export namespace backup {
 	        this.fileSize = source["fileSize"];
 	        this.success = source["success"];
 	        this.skipped = source["skipped"];
-	        this.message = source["message"];
 	        this.error = source["error"];
 	    }
 	}
@@ -32,11 +30,11 @@ export namespace backup {
 	    skipped: number;
 	    failed: number;
 	    results: BackupResult[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BackupSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.total = source["total"];
@@ -45,7 +43,7 @@ export namespace backup {
 	        this.failed = source["failed"];
 	        this.results = this.convertValues(source["results"], BackupResult);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -68,11 +66,11 @@ export namespace backup {
 	    name: string;
 	    path: string;
 	    size: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ImageFile(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -80,41 +78,19 @@ export namespace backup {
 	        this.size = source["size"];
 	    }
 	}
-	export class IntegrityResult {
-	    filename: string;
-	    path: string;
-	    status: string;
-	    message: string;
-	    expectedSize: number;
-	    actualSize: number;
-
-	    static createFrom(source: any = {}) {
-	        return new IntegrityResult(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.filename = source["filename"];
-	        this.path = source["path"];
-	        this.status = source["status"];
-	        this.message = source["message"];
-	        this.expectedSize = source["expectedSize"];
-	        this.actualSize = source["actualSize"];
-	    }
-	}
 
 }
 
 export namespace main {
-
+	
 	export class BackupSettings {
 	    sourcePath: string;
 	    destPath: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BackupSettings(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sourcePath = source["sourcePath"];
@@ -127,15 +103,12 @@ export namespace main {
 	    backupPath: string;
 	    backedUpAt: string;
 	    thumbnail: string;
-	    description: string;
-	    analysisStatus: string;
-	    analysisError: string;
-	    analyzedAt: string;
-
+	    colorTag: string;
+	
 	    static createFrom(source: any = {}) {
 	        return new PhotoSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -143,21 +116,18 @@ export namespace main {
 	        this.backupPath = source["backupPath"];
 	        this.backedUpAt = source["backedUpAt"];
 	        this.thumbnail = source["thumbnail"];
-	        this.description = source["description"];
-	        this.analysisStatus = source["analysisStatus"];
-	        this.analysisError = source["analysisError"];
-	        this.analyzedAt = source["analyzedAt"];
+	        this.colorTag = source["colorTag"];
 	    }
 	}
 	export class TagCloudItem {
 	    id: number;
 	    name: string;
 	    photoCount: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TagCloudItem(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -168,11 +138,11 @@ export namespace main {
 	export class TagSummary {
 	    id: number;
 	    name: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TagSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -185,16 +155,13 @@ export namespace main {
 	    backupPath: string;
 	    backedUpAt: string;
 	    thumbnail: string;
-	    description: string;
-	    analysisStatus: string;
-	    analysisError: string;
-	    analyzedAt: string;
+	    colorTag: string;
 	    tags: TagSummary[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TaggedPhotoSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -202,13 +169,10 @@ export namespace main {
 	        this.backupPath = source["backupPath"];
 	        this.backedUpAt = source["backedUpAt"];
 	        this.thumbnail = source["thumbnail"];
-	        this.description = source["description"];
-	        this.analysisStatus = source["analysisStatus"];
-	        this.analysisError = source["analysisError"];
-	        this.analyzedAt = source["analyzedAt"];
+	        this.colorTag = source["colorTag"];
 	        this.tags = this.convertValues(source["tags"], TagSummary);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -226,31 +190,6 @@ export namespace main {
 		    }
 		    return a;
 		}
-	}
-
-}
-
-export namespace service {
-
-	export class AnalysisSummary {
-	    enabled: boolean;
-	    pending: number;
-	    processing: number;
-	    completed: number;
-	    failed: number;
-
-	    static createFrom(source: any = {}) {
-	        return new AnalysisSummary(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.enabled = source["enabled"];
-	        this.pending = source["pending"];
-	        this.processing = source["processing"];
-	        this.completed = source["completed"];
-	        this.failed = source["failed"];
-	    }
 	}
 
 }

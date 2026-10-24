@@ -15,9 +15,8 @@ photo-backup/
 ├── app_photos.go                # API ค้นหารูป และแปลงผลลัพธ์เป็น DTO
 ├── app_tags.go                  # API จัดการ Tag
 ├── app_types.go                 # DTO เดิมของ main.App สำหรับ Wails bindings
-├── model/                      # GORM schema: Photo, Tag, PhotoTag, Setting, FileRecord
-│   ├── photo.go                # ข้อมูลรูป คำอธิบาย สถานะ AI และเวลาแก้ไขต้นทาง
-│   ├── photo_tag.go            # แยกความสัมพันธ์ Tag ที่มาจาก manual/AI
+├── model/                      # GORM schema: Photo, Tag, Setting, FileRecord
+│   ├── photo.go                # ข้อมูลรูป สี และเวลาแก้ไขต้นทาง
 │   ├── tag.go                  # Tag และความสัมพันธ์ many-to-many
 │   ├── setting.go              # ตาราง settings: ต้นทาง/ปลายทาง
 │   └── file_record.go          # ตาราง files: ประวัติสำรองตามแนวกลางภาค
@@ -42,9 +41,8 @@ photo-backup/
 │   ├── transfer.go             # เตรียมไฟล์ปลายทางและจัดการชื่อซ้ำก่อนย้ายสำเร็จ
 │   ├── verify.go               # เปรียบเทียบข้อมูลไฟล์จริงก่อนลบต้นทาง
 │   └── scanner_test.go
-├── analysis/                   # Gemini Flash แยกจาก UI และฐานข้อมูล
-│   ├── vision.go               # ส่งรูปและรับ JSON description/tags
-│   └── vision_test.go
+├── analysis/                   # วิเคราะห์ภาพพื้นฐาน แยกจาก UI และฐานข้อมูล
+│   └── color.go                # เฉลี่ย RGB และคืนชื่อ Tag สีเดียว
 ├── frontend/
 │   ├── app/
 │   │   ├── app.vue             # NuxtLayout ครอบ NuxtPage
@@ -76,10 +74,10 @@ photo-backup/
 
 หน้า Vue → composable → `wailsjs/go/main/App` → `app_*.go` → Service → Repository → SQLite
 
-เมื่อสำรองรูป Service เรียก `backup` เพื่อค้นหารูป แล้วตรวจข้อมูลสำรองเดิมและชื่อซ้ำ
-`backup` เตรียมไฟล์ปลายทางด้วย worker สูงสุด 4 ตัว จากนั้น Repository บันทึกรูปและประวัติ `files`
-ใน transaction เดียว แล้ว Service จึงลบต้นทางด้วย `finishMove` เป็นขั้นสุดท้าย
-หลังบันทึก DB แล้ว Service ส่ง Photo ID เข้าคิว AI worker 3 ตัว เพื่อสร้าง description และ Tag แบบเบื้องหลัง
+เมื่อสำรองรูป Service เรียก `backup` เพื่อค้นหารูป แล้วตรวจข้อมูลสำรองเดิม
+รูปที่ต้องย้ายจะผ่าน `analysis` เพื่อวิเคราะห์สี แล้ว `backup` เตรียมไฟล์ปลายทาง
+จากนั้น Repository บันทึกรูป ประวัติ `files` และความสัมพันธ์ Tag ใน transaction เดียว
+Service จึงลบต้นทางด้วย `finishMove` เป็นขั้นสุดท้าย เมื่อย้ายสำเร็จรูปจะเหลืออยู่ที่ปลายทาง
 หากเป็นการทำต่อจากครั้งก่อน จะเทียบ bytes ผ่าน `backup.EqualFiles` ก่อนใช้ปลายทางเดิมและลบต้นทาง
 `Skipped` หมายถึงใช้ปลายทางเดิมและลบต้นทางสำเร็จแล้ว ไม่ใช่ข้ามโดยทิ้งต้นทางไว้
 ส่วน `app_backup.go` แปลง callback เป็น event `backup:progress` เพื่ออัปเดต UI
@@ -106,7 +104,7 @@ Service จึงทดสอบได้โดยไม่ต้องเปิ
 - ใช้ `~/` สำหรับไฟล์ภายใน `frontend/app` และ `~~/wailsjs/` สำหรับ bridge ที่ frontend root
 - Public method ที่ให้หน้าเว็บเรียกอยู่ใน `app_*.go`; ให้ทำหน้าที่รับคำสั่งและจัดรูปผลลัพธ์
 - งานประสานหลายขั้นตอนอยู่ใน `service/`; SQL/GORM และ transaction อยู่ใน `repository/`
-- Schema อยู่ใน `model/`; งาน filesystem อยู่ใน `backup/`; การวิเคราะห์ AI อยู่ใน `analysis/`
+- Schema อยู่ใน `model/`; งาน filesystem อยู่ใน `backup/`; การวิเคราะห์สีอยู่ใน `analysis/`
 - งานฐานข้อมูลใน Service ใช้ context ของแอปพร้อม timeout 10 วินาทีต่อ operation
 - เมื่อแก้ public methods หรือ DTO ให้รัน `wails generate module` และตรวจ typecheck ใหม่
 
@@ -124,14 +122,12 @@ Service จึงทดสอบได้โดยไม่ต้องเปิ
 ไม่เก็บฐานข้อมูลผู้ใช้ไว้ใน source tree
 
 **พฤติกรรมการสำรองปัจจุบัน:** ย้ายไฟล์ โดยลบต้นทางหลังไฟล์ปลายทางและ SQLite พร้อมแล้ว
-รองรับ JPG, JPEG และ PNG โดยเตรียมไฟล์หลายรายการพร้อมกัน แต่บันทึก SQLite ทีละรายการเพื่อป้องกัน database lock
-ชื่อซ้ำจะแจ้งเตือนและข้ามรายการ ไม่สร้างไฟล์ชื่อ `(1)` อัตโนมัติ
+ทำทีละไฟล์เพื่อให้โค้ดอ่านง่าย รองรับ JPG, JPEG และ PNG
 ตาราง `settings/files` ใช้รูปแบบจากแกนงานกลางภาค แต่ไม่ได้นำเข้าฐานข้อมูลของโปรเจกต์อ้างอิงอัตโนมัติ
 
-Tag จาก AI และ Tag ที่ผู้ใช้เพิ่มใช้ตาราง `tags/photo_tags` เดียวกัน โดยคอลัมน์ `source` แยก `ai` กับ `manual`
-การวิเคราะห์ซ้ำจะลบเฉพาะความสัมพันธ์ Tag ที่มาจาก AI และคง Tag ของผู้ใช้ไว้
+Tag สีอัตโนมัติและ Tag ที่ผู้ใช้เพิ่มใช้ตาราง `tags/photo_tags` เดียวกัน
 ลบ Tag ที่หน้า Tag คือการลบแถวและความสัมพันธ์ ไม่ลบรูป
-ไม่มีการวิเคราะห์สีด้วยโค้ดของเราเองแล้ว การวิเคราะห์ AI มีสถานะ `pending`, `processing`, `completed`, `failed`
+การวิเคราะห์สีทำเมื่อสำรองรูปใหม่ รูปเดิมที่ถูกข้ามจะไม่ถูกวิเคราะห์หรือสร้าง Tag กลับมาใหม่
 
 ## ตรวจสอบก่อนส่งงาน
 

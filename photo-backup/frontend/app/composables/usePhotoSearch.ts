@@ -1,7 +1,6 @@
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted } from "vue";
 import { GetTagCloud, SearchPhotoLibrary } from "~~/wailsjs/go/main/App";
 import type { PhotoItem, TagCloudItem } from "~/types/photo";
-import { EventsOn } from "~~/wailsjs/runtime/runtime";
 
 export function usePhotoSearch() {
   const tagCloud = ref<TagCloudItem[]>([]);
@@ -79,12 +78,7 @@ export function usePhotoSearch() {
     selectedPhotoForModal.value = photo;
   }
 
-  let stopAnalysis: (() => void) | undefined;
-  onMounted(() => {
-    stopAnalysis = EventsOn("photo:analysis", loadInitialData);
-    loadInitialData();
-  });
-  onUnmounted(() => stopAnalysis?.());
+  onMounted(loadInitialData);
 
   return {
     tagCloud,

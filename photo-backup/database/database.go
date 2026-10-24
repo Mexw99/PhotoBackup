@@ -59,39 +59,17 @@ func OpenAt(path string) (*Database, error) {
 	if err != nil {
 		return nil, err
 	}
-	// SQLite permits one writer at a time. A single connection plus a short
-	// busy timeout prevents parallel backup workers from failing with SQLITE_BUSY.
-	sqlDB, err := conn.DB()
-	if err != nil {
-		return nil, err
-	}
-	sqlDB.SetMaxOpenConns(1)
-	sqlDB.SetMaxIdleConns(1)
-	if err := conn.Exec("PRAGMA busy_timeout = 5000").Error; err != nil {
-		_ = sqlDB.Close()
-		return nil, err
-	}
-	if err := conn.SetupJoinTable(&model.Photo{}, "Tags", &model.PhotoTag{}); err != nil {
-		_ = sqlDB.Close()
-		return nil, err
-	}
-	if err := conn.SetupJoinTable(&model.Tag{}, "Photos", &model.PhotoTag{}); err != nil {
-		_ = sqlDB.Close()
-		return nil, err
-	}
 
 	if err := conn.Transaction(func(tx *gorm.DB) error {
-		if tx.Migrator().HasColumn(&model.Photo{}, "color_tag") {
-			// ColorTag เป็นระบบวิเคราะห์แบบเดิมที่เลิกใช้แล้ว จึงเอาออกจาก schema
-			// โดยคงข้อมูลรูป, Tag ที่ผู้ใช้เพิ่มเอง และตารางประวัติเอาไว้
-			if err := tx.Exec("ALTER TABLE photos DROP COLUMN color_tag").Error; err != nil {
+		if tx.Migrator().HasColumn(&model.Photo{}, "description") {
+			// ลบคอลัมน์เก่าผ่าน SQLite โดยคงตารางและ indexes อื่นไว้
+			if err := tx.Exec("ALTER TABLE photos DROP COLUMN description").Error; err != nil {
 				return err
 			}
 		}
 		return tx.AutoMigrate(
 			&model.Photo{},
 			&model.Tag{},
-			&model.PhotoTag{},
 			&model.FileRecord{},
 			&model.Setting{},
 		)

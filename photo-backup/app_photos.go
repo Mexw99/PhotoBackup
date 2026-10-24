@@ -32,20 +32,13 @@ func (a *App) GetRecentPhotos(limit int) []PhotoSummary {
 	}
 	result := make([]PhotoSummary, 0, len(photos))
 	for _, photo := range photos {
-		analyzedAt := ""
-		if photo.AnalyzedAt != nil {
-			analyzedAt = photo.AnalyzedAt.Format("2006-01-02 15:04:05")
-		}
 		result = append(result, PhotoSummary{
-			ID:             photo.ID,
-			OriginalName:   photo.OriginalName,
-			BackupPath:     photo.BackupPath,
-			BackedUpAt:     photo.BackedUpAt.Format("2006-01-02 15:04:05"),
-			Thumbnail:      service.ReadImageDataURL(photo.BackupPath),
-			Description:    photo.Description,
-			AnalysisStatus: photo.AnalysisStatus,
-			AnalysisError:  photo.AnalysisError,
-			AnalyzedAt:     analyzedAt,
+			ID:           photo.ID,
+			OriginalName: photo.OriginalName,
+			BackupPath:   photo.BackupPath,
+			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
+			Thumbnail:    service.ReadImageDataURL(photo.BackupPath),
+			ColorTag:     photo.ColorTag,
 		})
 	}
 	return result
@@ -88,25 +81,18 @@ func (a *App) SearchPhotoLibrary(query string, tagNames []string) ([]TaggedPhoto
 func taggedPhotoSummaries(photos []model.Photo) []TaggedPhotoSummary {
 	result := make([]TaggedPhotoSummary, 0, len(photos))
 	for _, photo := range photos {
-		analyzedAt := ""
-		if photo.AnalyzedAt != nil {
-			analyzedAt = photo.AnalyzedAt.Format("2006-01-02 15:04:05")
-		}
 		tags := make([]TagSummary, 0, len(photo.Tags))
 		for _, tag := range photo.Tags {
 			tags = append(tags, TagSummary{ID: tag.ID, Name: tag.Name})
 		}
 		result = append(result, TaggedPhotoSummary{
-			ID:             photo.ID,
-			OriginalName:   photo.OriginalName,
-			BackupPath:     photo.BackupPath,
-			BackedUpAt:     photo.BackedUpAt.Format("2006-01-02 15:04:05"),
-			Thumbnail:      service.ReadImageDataURL(photo.BackupPath),
-			Description:    photo.Description,
-			AnalysisStatus: photo.AnalysisStatus,
-			AnalysisError:  photo.AnalysisError,
-			AnalyzedAt:     analyzedAt,
-			Tags:           tags,
+			ID:           photo.ID,
+			OriginalName: photo.OriginalName,
+			BackupPath:   photo.BackupPath,
+			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
+			Thumbnail:    service.ReadImageDataURL(photo.BackupPath),
+			ColorTag:     photo.ColorTag,
+			Tags:         tags,
 		})
 	}
 	return result

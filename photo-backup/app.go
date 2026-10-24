@@ -27,9 +27,6 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(_ context.Context) {
-	if a.service != nil {
-		a.service.Close()
-	}
 	if a.database != nil {
 		_ = a.database.Close()
 	}

@@ -50,16 +50,8 @@
           </div>
 
           <div class="detail-row">
-            <span class="detail-label">คำอธิบายจาก AI:</span>
-            <span class="detail-value">{{ photo.description || "ยังไม่ได้วิเคราะห์" }}</span>
-          </div>
-
-          <div class="detail-row">
-            <span class="detail-label">สถานะการวิเคราะห์:</span>
-            <span class="detail-value" :class="`analysis-${photo.analysisStatus}`">
-              {{ analysisStatusLabel(photo.analysisStatus) }}
-            </span>
-            <span v-if="photo.analysisError" class="analysis-error">{{ photo.analysisError }}</span>
+            <span class="detail-label">สีหลักจากรูปภาพ:</span>
+            <span class="detail-value">{{ photo.colorTag || "ยังไม่ได้วิเคราะห์สี" }}</span>
           </div>
 
           <div class="detail-row">
@@ -115,15 +107,6 @@ function handleKeyDown(e: KeyboardEvent) {
   if (e.key === "Escape" && props.photo) {
     emit("close");
   }
-}
-
-function analysisStatusLabel(status: string) {
-  return {
-    pending: "รอวิเคราะห์",
-    processing: "กำลังวิเคราะห์",
-    completed: "วิเคราะห์แล้ว",
-    failed: "วิเคราะห์ไม่สำเร็จ",
-  }[status] || "รอวิเคราะห์";
 }
 
 onMounted(() => {

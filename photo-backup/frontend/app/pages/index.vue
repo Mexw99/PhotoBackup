@@ -20,25 +20,6 @@
         <span>Tag ทั้งหมด</span>
         <strong>{{ tagCount }}</strong>
       </article>
-
-      <article class="summary-card">
-        <span>AI วิเคราะห์แล้ว</span>
-        <strong>{{ analysisStatus.completed }}</strong>
-        <small v-if="!analysisStatus.enabled">ยังไม่ได้ตั้งค่า AI</small>
-        <small v-else-if="analysisStatus.pending || analysisStatus.processing">
-          รอ {{ analysisStatus.pending + analysisStatus.processing }} รูป
-        </small>
-        <small v-else-if="analysisStatus.failed">ล้มเหลว {{ analysisStatus.failed }} รูป</small>
-        <button
-          v-if="analysisStatus.failed"
-          type="button"
-          class="retry-analysis-button"
-          :disabled="retryingAnalysis"
-          @click="retryFailedAnalysis"
-        >
-          {{ retryingAnalysis ? "กำลังลองใหม่..." : "ลองวิเคราะห์ใหม่" }}
-        </button>
-      </article>
     </section>
 
     <p v-if="errorMessage" class="error">
@@ -69,8 +50,6 @@
             <div>
               <strong>{{ photo.originalName }}</strong>
               <small>{{ photo.backedUpAt }}</small>
-              <small v-if="photo.description">{{ photo.description }}</small>
-              <small>AI: {{ analysisStatusLabel(photo.analysisStatus) }}</small>
               <small>{{ photo.backupPath }}</small>
             </div>
           </div>
@@ -110,20 +89,8 @@ const {
   tagCount,
   recentPhotos,
   tags,
-  analysisStatus,
-  retryingAnalysis,
-  retryFailedAnalysis,
   errorMessage,
 } = useDashboard();
-
-function analysisStatusLabel(status: string) {
-  return {
-    pending: "รอวิเคราะห์",
-    processing: "กำลังวิเคราะห์",
-    completed: "วิเคราะห์แล้ว",
-    failed: "วิเคราะห์ไม่สำเร็จ",
-  }[status] || "รอวิเคราะห์";
-}
 </script>
 
 <style scoped>
@@ -147,7 +114,7 @@ function analysisStatusLabel(status: string) {
 .summary {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   margin-bottom: 24px;
 }
 
@@ -169,28 +136,6 @@ function analysisStatusLabel(status: string) {
 .summary-card strong {
   color: #2563eb;
   font-size: 24px;
-}
-
-.summary-card small {
-  color: #64748b;
-  display: block;
-  margin-top: 6px;
-}
-
-.retry-analysis-button {
-  background: #e2e8f0;
-  border: 0;
-  border-radius: 6px;
-  color: #334155;
-  cursor: pointer;
-  font-size: 12px;
-  margin-top: 8px;
-  padding: 6px 8px;
-}
-
-.retry-analysis-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
 }
 
 .content-grid {

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"photo-backup/analysis"
 	"photo-backup/backup"
 	"photo-backup/model"
 )
@@ -21,7 +22,6 @@ type preparedBackup struct {
 	result     backup.BackupResult
 	sourceInfo os.FileInfo
 	photo      *model.Photo
-	analysisID uint
 	canFinish  bool
 }
 
@@ -48,8 +48,7 @@ func DefaultBackupFolder() string {
 	return filepath.Join(home, "PhotoBackup")
 }
 
-// StartBackup: ตรวจโฟลเดอร์ → เตรียมปลายทาง → บันทึก DB → ลบต้นทาง
-// การวิเคราะห์ AI จะถูกส่งเข้าคิวหลังจากขั้นตอน Backup จบแล้ว
+// StartBackup: ตรวจโฟลเดอร์ → ดูสี → เตรียมปลายทาง → บันทึก DB → ลบต้นทาง
 func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.ProgressCallback) (backup.BackupSummary, error) {
 	if !backupLock.TryLock() {
 		return backup.BackupSummary{}, fmt.Errorf("กำลังสำรองรูปภาพอยู่ กรุณารอให้เสร็จก่อน")
@@ -70,20 +69,15 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 	if err := s.SaveBackupSettings(sourcePath, destPath); err != nil {
 		return backup.BackupSummary{}, err
 	}
-	duplicatePaths, err := s.backupPathsInDestination(destPath)
-	if err != nil {
-		return backup.BackupSummary{}, err
-	}
 
 	summary := backup.BackupSummary{Total: len(images), Results: make([]backup.BackupResult, len(images))}
-	for completed := range s.prepareBackups(images, sourcePath, destPath, duplicatePaths) {
+	for completed := range s.prepareBackups(images, sourcePath, destPath) {
 		result := completed.prepared.result
 		if completed.err == nil {
 			result, completed.err = s.commitPreparedBackup(completed.prepared)
 		}
 		if completed.err != nil {
 			result.Success = false
-			result.Skipped = false
 			result.Error = completed.err.Error()
 			summary.Failed++
 		} else if result.Skipped {
@@ -102,7 +96,7 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 // prepareBackups performs the expensive file work concurrently. SQLite writes
 // are intentionally kept out of this stage so that many workers do not fight
 // over the same database lock.
-func (s *Service) prepareBackups(images []backup.ImageFile, sourcePath, destPath string, duplicatePaths map[string]struct{}) <-chan backupJobResult {
+func (s *Service) prepareBackups(images []backup.ImageFile, sourcePath, destPath string) <-chan backupJobResult {
 	results := make(chan backupJobResult, len(images))
 	jobs := make(chan backupJob)
 	workers := backupWorkerCount(len(images))
@@ -113,7 +107,7 @@ func (s *Service) prepareBackups(images []backup.ImageFile, sourcePath, destPath
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				prepared, err := s.prepareBackup(job.image, sourcePath, destPath, duplicatePaths)
+				prepared, err := s.prepareBackup(job.image, sourcePath, destPath)
 				results <- backupJobResult{index: job.index, prepared: prepared, err: err}
 			}
 		}()
@@ -148,7 +142,7 @@ func backupWorkerCount(jobCount int) int {
 	return workers
 }
 
-func (s *Service) prepareBackup(image backup.ImageFile, sourcePath, destPath string, duplicatePaths map[string]struct{}) (preparedBackup, error) {
+func (s *Service) prepareBackup(image backup.ImageFile, sourcePath, destPath string) (preparedBackup, error) {
 	prepared := preparedBackup{
 		image:  image,
 		result: backup.BackupResult{OriginalName: image.Name, OriginalPath: image.Path, FileSize: image.Size},
@@ -159,14 +153,6 @@ func (s *Service) prepareBackup(image backup.ImageFile, sourcePath, destPath str
 	}
 	image.Size, prepared.result.FileSize = info.Size(), info.Size()
 	prepared.sourceInfo = info
-	if err := backup.ValidateImage(image.Path); err != nil {
-		return prepared, err
-	}
-	relative, err := filepath.Rel(sourcePath, image.Path)
-	if err != nil {
-		return prepared, err
-	}
-	expectedPath := filepath.Clean(filepath.Join(destPath, relative))
 	store, cancel := s.operation()
 	previous, err := store.FindBackup(image.Path, destPath)
 	cancel()
@@ -181,29 +167,19 @@ func (s *Service) prepareBackup(image backup.ImageFile, sourcePath, destPath str
 		if equal {
 			prepared.result.BackupPath = previous.BackupPath
 			prepared.result.Success, prepared.result.Skipped = true, true
-			prepared.result.Message = "ใช้ไฟล์ปลายทางเดิม ตรวจสอบแล้วตรงกัน และเตรียมลบต้นฉบับ"
-			prepared.analysisID = previous.ID
 			prepared.canFinish = true
 			return prepared, nil
 		}
 	}
-	if previous == nil {
-		if _, err := os.Lstat(expectedPath); err == nil {
-			prepared.result.Success = true
-			prepared.result.Skipped = true
-			prepared.result.Message = "พบชื่อไฟล์ซ้ำในโฟลเดอร์ปลายทาง จึงไม่ย้ายไฟล์ และเก็บต้นฉบับไว้"
-			return prepared, nil
-		} else if !os.IsNotExist(err) {
-			return prepared, err
-		}
-		if _, exists := duplicatePaths[expectedPath]; exists {
-			prepared.result.Success = true
-			prepared.result.Skipped = true
-			prepared.result.Message = "พบประวัติชื่อไฟล์ซ้ำในฐานข้อมูล จึงไม่ย้ายไฟล์ และเก็บต้นฉบับไว้"
-			return prepared, nil
-		}
-	}
 
+	colorTag, err := analysis.DetectColor(image.Path)
+	if err != nil {
+		return prepared, err
+	}
+	relative, err := filepath.Rel(sourcePath, image.Path)
+	if err != nil {
+		return prepared, err
+	}
 	prepared.result, err = backup.CopyImage(image, filepath.Join(destPath, filepath.Dir(relative)))
 	if err != nil {
 		return prepared, err
@@ -213,26 +189,12 @@ func (s *Service) prepareBackup(image backup.ImageFile, sourcePath, destPath str
 		OriginalPath:     image.Path,
 		BackupPath:       prepared.result.BackupPath,
 		FileSize:         image.Size,
-		AnalysisStatus:   model.AnalysisPending,
 		SourceModifiedAt: info.ModTime(),
 		BackedUpAt:       time.Now(),
+		ColorTag:         colorTag,
 	}
 	prepared.canFinish = true
 	return prepared, nil
-}
-
-func (s *Service) backupPathsInDestination(destPath string) (map[string]struct{}, error) {
-	store, cancel := s.operation()
-	paths, err := store.BackupPathsInDestination(destPath)
-	cancel()
-	if err != nil {
-		return nil, err
-	}
-	duplicates := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		duplicates[filepath.Clean(path)] = struct{}{}
-	}
-	return duplicates, nil
 }
 
 func (s *Service) commitPreparedBackup(prepared preparedBackup) (backup.BackupResult, error) {
@@ -247,9 +209,6 @@ func (s *Service) commitPreparedBackup(prepared preparedBackup) (backup.BackupRe
 			result.BackupPath = ""
 			return result, fmt.Errorf("บันทึกข้อมูลรูปไม่ได้: %w", err)
 		}
-		s.enqueuePhotoAnalysis(prepared.photo.ID)
-	} else if prepared.analysisID != 0 {
-		s.enqueuePhotoAnalysis(prepared.analysisID)
 	}
 	if prepared.canFinish {
 		if err := s.finishMove(prepared.image.Path, result.BackupPath, prepared.sourceInfo); err != nil {

@@ -24,7 +24,6 @@ type BackupResult struct {
 	FileSize     int64  `json:"fileSize"`
 	Success      bool   `json:"success"`
 	Skipped      bool   `json:"skipped"`
-	Message      string `json:"message"`
 	Error        string `json:"error"`
 }
 

@@ -22,9 +22,7 @@
         <div class="photo-info">
           <strong>{{ photo.originalName }}</strong>
           <small>{{ photo.backedUpAt }}</small>
-          <small v-if="photo.description">คำอธิบาย: {{ photo.description }}</small>
-          <small>AI: {{ analysisStatusLabel(photo.analysisStatus) }}</small>
-          <small v-if="photo.analysisError" class="analysis-error">{{ photo.analysisError }}</small>
+          <small v-if="photo.colorTag">สีหลัก: {{ photo.colorTag }}</small>
           <small class="path">{{ photo.backupPath }}</small>
         </div>
         <div class="photo-tags">
@@ -62,15 +60,6 @@ function togglePhoto(photoID: number, checked: boolean) {
   else next.delete(photoID);
 
   emit("update:selectedIDs", [...next]);
-}
-
-function analysisStatusLabel(status: string) {
-  return {
-    pending: "รอวิเคราะห์",
-    processing: "กำลังวิเคราะห์",
-    completed: "วิเคราะห์แล้ว",
-    failed: "วิเคราะห์ไม่สำเร็จ",
-  }[status] || "รอวิเคราะห์";
 }
 </script>
 
@@ -124,9 +113,6 @@ function analysisStatusLabel(status: string) {
 .photo-info strong,
 .photo-info small {
   display: block;
-}
-.analysis-error {
-  color: #b91c1c !important;
 }
 
 .photo-info strong {
