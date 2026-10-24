@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,25 @@ import (
 
 // ป้องกันกดสำรองซ้อนกันระหว่างที่ยังทำงานกับไฟล์ชุดเดิม
 var backupLock sync.Mutex
+
+type preparedBackup struct {
+	image      backup.ImageFile
+	result     backup.BackupResult
+	sourceInfo os.FileInfo
+	photo      *model.Photo
+	canFinish  bool
+}
+
+type backupJob struct {
+	index int
+	image backup.ImageFile
+}
+
+type backupJobResult struct {
+	index    int
+	prepared preparedBackup
+	err      error
+}
 
 func ListImageFiles(sourcePath string) ([]backup.ImageFile, error) {
 	return backup.DiscoverImages(sourcePath)
@@ -50,87 +70,152 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 		return backup.BackupSummary{}, err
 	}
 
-	summary := backup.BackupSummary{Total: len(images), Results: make([]backup.BackupResult, 0, len(images))}
-	for index, image := range images {
-		result, err := s.backupPhoto(image, sourcePath, destPath)
-		if err != nil {
+	summary := backup.BackupSummary{Total: len(images), Results: make([]backup.BackupResult, len(images))}
+	for completed := range s.prepareBackups(images, sourcePath, destPath) {
+		result := completed.prepared.result
+		if completed.err == nil {
+			result, completed.err = s.commitPreparedBackup(completed.prepared)
+		}
+		if completed.err != nil {
 			result.Success = false
-			result.Error = err.Error()
+			result.Error = completed.err.Error()
 			summary.Failed++
 		} else if result.Skipped {
 			summary.Skipped++
 		} else {
 			summary.Success++
 		}
-		summary.Results = append(summary.Results, result)
+		summary.Results[completed.index] = result
 		if onProgress != nil {
-			onProgress(index+1, len(images), image.Name)
+			onProgress(summary.Success+summary.Skipped+summary.Failed, len(images), result.OriginalName)
 		}
 	}
 	return summary, nil
 }
 
-func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath string) (backup.BackupResult, error) {
-	result := backup.BackupResult{OriginalName: image.Name, OriginalPath: image.Path, FileSize: image.Size}
+// prepareBackups performs the expensive file work concurrently. SQLite writes
+// are intentionally kept out of this stage so that many workers do not fight
+// over the same database lock.
+func (s *Service) prepareBackups(images []backup.ImageFile, sourcePath, destPath string) <-chan backupJobResult {
+	results := make(chan backupJobResult, len(images))
+	jobs := make(chan backupJob)
+	workers := backupWorkerCount(len(images))
+	var wg sync.WaitGroup
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				prepared, err := s.prepareBackup(job.image, sourcePath, destPath)
+				results <- backupJobResult{index: job.index, prepared: prepared, err: err}
+			}
+		}()
+	}
+
+	go func() {
+		for index, image := range images {
+			jobs <- backupJob{index: index, image: image}
+		}
+		close(jobs)
+		wg.Wait()
+		close(results)
+	}()
+
+	return results
+}
+
+func backupWorkerCount(jobCount int) int {
+	if jobCount < 2 {
+		return 1
+	}
+	workers := runtime.NumCPU()
+	if workers < 2 {
+		workers = 2
+	}
+	if workers > 4 {
+		workers = 4
+	}
+	if workers > jobCount {
+		workers = jobCount
+	}
+	return workers
+}
+
+func (s *Service) prepareBackup(image backup.ImageFile, sourcePath, destPath string) (preparedBackup, error) {
+	prepared := preparedBackup{
+		image:  image,
+		result: backup.BackupResult{OriginalName: image.Name, OriginalPath: image.Path, FileSize: image.Size},
+	}
 	info, err := os.Stat(image.Path)
 	if err != nil {
-		return result, err
+		return prepared, err
 	}
-	image.Size, result.FileSize = info.Size(), info.Size()
+	image.Size, prepared.result.FileSize = info.Size(), info.Size()
+	prepared.sourceInfo = info
 	store, cancel := s.operation()
 	previous, err := store.FindBackup(image.Path, destPath)
 	cancel()
 	if err != nil {
-		return result, err
+		return prepared, err
 	}
 	if alreadyBackedUp(previous, info, destPath) {
 		equal, err := backup.EqualFiles(image.Path, previous.BackupPath)
 		if err != nil {
-			return result, err
+			return prepared, err
 		}
 		if equal {
-			result.BackupPath = previous.BackupPath
-			if err := s.finishMove(image.Path, result.BackupPath, info); err != nil {
-				return result, err
-			}
-			result.Success, result.Skipped = true, true
-			return result, nil
+			prepared.result.BackupPath = previous.BackupPath
+			prepared.result.Success, prepared.result.Skipped = true, true
+			prepared.canFinish = true
+			return prepared, nil
 		}
 	}
 
 	colorTag, err := analysis.DetectColor(image.Path)
 	if err != nil {
-		return result, err
+		return prepared, err
 	}
 	relative, err := filepath.Rel(sourcePath, image.Path)
 	if err != nil {
-		return result, err
+		return prepared, err
 	}
-	result, err = backup.CopyImage(image, filepath.Join(destPath, filepath.Dir(relative)))
+	prepared.result, err = backup.CopyImage(image, filepath.Join(destPath, filepath.Dir(relative)))
 	if err != nil {
-		return result, err
+		return prepared, err
 	}
-	photo := &model.Photo{
+	prepared.photo = &model.Photo{
 		OriginalName:     image.Name,
 		OriginalPath:     image.Path,
-		BackupPath:       result.BackupPath,
+		BackupPath:       prepared.result.BackupPath,
 		FileSize:         image.Size,
 		SourceModifiedAt: info.ModTime(),
 		BackedUpAt:       time.Now(),
 		ColorTag:         colorTag,
 	}
-	store, cancel = s.operation()
-	err = store.SaveBackup(photo)
-	cancel()
-	if err != nil {
-		// หาก DB บันทึกไม่ได้ ลบเฉพาะสำเนาที่เพิ่งสร้าง และเก็บต้นฉบับไว้
-		_ = os.Remove(result.BackupPath)
-		result.BackupPath = ""
-		return result, fmt.Errorf("บันทึกข้อมูลรูปไม่ได้: %w", err)
+	prepared.canFinish = true
+	return prepared, nil
+}
+
+func (s *Service) commitPreparedBackup(prepared preparedBackup) (backup.BackupResult, error) {
+	result := prepared.result
+	if prepared.photo != nil {
+		store, cancel := s.operation()
+		err := store.SaveBackup(prepared.photo)
+		cancel()
+		if err != nil {
+			// หาก DB บันทึกไม่ได้ ลบเฉพาะสำเนาที่เพิ่งสร้าง และเก็บต้นฉบับไว้
+			_ = os.Remove(result.BackupPath)
+			result.BackupPath = ""
+			return result, fmt.Errorf("บันทึกข้อมูลรูปไม่ได้: %w", err)
+		}
 	}
-	if err := s.finishMove(image.Path, result.BackupPath, info); err != nil {
-		return result, err
+	if prepared.canFinish {
+		if err := s.finishMove(prepared.image.Path, result.BackupPath, prepared.sourceInfo); err != nil {
+			return result, err
+		}
 	}
+	result.Success = true
 	return result, nil
 }
 
