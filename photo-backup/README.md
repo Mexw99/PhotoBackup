@@ -133,6 +133,9 @@ Python หรือ Ollama หากมีไฟล์ `models/blip-image-captio
 `tools/bin/windows/caption_worker.exe` ครบ ส่วน Ollama ยังคงเป็น fallback หรือ
 ตัวเลือกสำหรับเครื่องที่มีโมเดล Vision อยู่แล้ว
 
+Caption จะถูกส่งต่อให้โมเดล `models/opus-mt-en-mul` แปลเป็นภาษาไทยแบบ Local
+ถ้าโมเดลแปลมีอยู่ครบ หากไม่มีโมเดลแปล Worker จะยังทำงานต่อและคืน Caption ภาษาอังกฤษ
+
 Worker มีขนาดใหญ่เนื่องจากรวม PyTorch/Ultralytics ไว้ภายใน จึงควรใช้ Git LFS
 หรือส่งเป็น ZIP หาก Repository ไม่รองรับไฟล์ขนาดใหญ่
 

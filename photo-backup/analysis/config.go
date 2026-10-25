@@ -8,23 +8,24 @@ import (
 )
 
 type portableAIConfig struct {
-	Provider        string `json:"aiProvider"`
-	GeminiKeys      string `json:"geminiApiKeys"`
-	GeminiModel     string `json:"geminiModel"`
-	OpenAIKeys      string `json:"openaiApiKeys"`
-	OpenAIModel     string `json:"openaiModel"`
-	OllamaURL       string `json:"ollamaUrl"`
-	OllamaModel     string `json:"ollamaModel"`
-	YOLOEnabled     string `json:"yoloEnabled"`
-	YOLOModel       string `json:"yoloModelPath"`
-	YOLOPython      string `json:"yoloPython"`
-	YOLOScript      string `json:"yoloScript"`
-	YOLOWorker      string `json:"yoloWorker"`
-	CaptionProvider string `json:"captionProvider"`
-	BLIPModel       string `json:"blipModelPath"`
-	BLIPPython      string `json:"blipPython"`
-	BLIPScript      string `json:"blipScript"`
-	BLIPWorker      string `json:"blipWorker"`
+	Provider            string `json:"aiProvider"`
+	GeminiKeys          string `json:"geminiApiKeys"`
+	GeminiModel         string `json:"geminiModel"`
+	OpenAIKeys          string `json:"openaiApiKeys"`
+	OpenAIModel         string `json:"openaiModel"`
+	OllamaURL           string `json:"ollamaUrl"`
+	OllamaModel         string `json:"ollamaModel"`
+	YOLOEnabled         string `json:"yoloEnabled"`
+	YOLOModel           string `json:"yoloModelPath"`
+	YOLOPython          string `json:"yoloPython"`
+	YOLOScript          string `json:"yoloScript"`
+	YOLOWorker          string `json:"yoloWorker"`
+	CaptionProvider     string `json:"captionProvider"`
+	BLIPModel           string `json:"blipModelPath"`
+	BLIPTranslatorModel string `json:"blipTranslatorModelPath"`
+	BLIPPython          string `json:"blipPython"`
+	BLIPScript          string `json:"blipScript"`
+	BLIPWorker          string `json:"blipWorker"`
 }
 
 // loadPortableConfig loads config.json from the working directory or beside
@@ -60,6 +61,7 @@ func loadPortableConfig() {
 		setPathIfMissing("YOLO_WORKER", config.YOLOWorker, filepath.Dir(path))
 		setIfMissing("AI_CAPTION_PROVIDER", config.CaptionProvider)
 		setPathIfMissing("BLIP_MODEL_PATH", config.BLIPModel, filepath.Dir(path))
+		setPathIfMissing("BLIP_TRANSLATOR_MODEL_PATH", config.BLIPTranslatorModel, filepath.Dir(path))
 		setPathIfMissing("BLIP_PYTHON", config.BLIPPython, filepath.Dir(path))
 		setPathIfMissing("BLIP_SCRIPT", config.BLIPScript, filepath.Dir(path))
 		setPathIfMissing("BLIP_WORKER", config.BLIPWorker, filepath.Dir(path))

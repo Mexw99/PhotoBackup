@@ -8,6 +8,7 @@
   "ollamaModel": "qwen2.5vl:3b",
   "captionProvider": "blip",
   "blipModelPath": "models/blip-image-captioning-base",
+  "blipTranslatorModelPath": "models/opus-mt-en-mul",
   "blipPython": "",
   "blipScript": "tools/caption_worker.py",
   "blipWorker": "tools/bin/windows/caption_worker.exe",

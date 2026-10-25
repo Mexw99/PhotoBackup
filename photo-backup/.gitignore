@@ -23,6 +23,8 @@ photo-backup.db-*
 !models/yolo11n.pt
 !models/blip-image-captioning-base/
 !models/blip-image-captioning-base/**
+!models/opus-mt-en-mul/
+!models/opus-mt-en-mul/**
 !tools/bin/
 !tools/bin/windows/
 !tools/bin/windows/yolo_worker.exe

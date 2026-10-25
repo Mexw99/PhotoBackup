@@ -1,3 +1,4 @@
 photo-backup/models/*.pt filter=lfs diff=lfs merge=lfs -text
 photo-backup/tools/bin/**/*.exe filter=lfs diff=lfs merge=lfs -text
 photo-backup/models/blip-image-captioning-base/*.safetensors filter=lfs diff=lfs merge=lfs -text
+photo-backup/models/opus-mt-en-mul/*.bin filter=lfs diff=lfs merge=lfs -text
