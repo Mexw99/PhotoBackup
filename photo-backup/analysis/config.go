@@ -13,8 +13,6 @@ type portableAIConfig struct {
 	GeminiModel         string `json:"geminiModel"`
 	OpenAIKeys          string `json:"openaiApiKeys"`
 	OpenAIModel         string `json:"openaiModel"`
-	OllamaURL           string `json:"ollamaUrl"`
-	OllamaModel         string `json:"ollamaModel"`
 	YOLOEnabled         string `json:"yoloEnabled"`
 	YOLOModel           string `json:"yoloModelPath"`
 	YOLOPython          string `json:"yoloPython"`
@@ -52,8 +50,6 @@ func loadPortableConfig() {
 		setIfMissing("GEMINI_MODEL", config.GeminiModel)
 		setIfMissing("OPENAI_API_KEYS", config.OpenAIKeys)
 		setIfMissing("OPENAI_MODEL", config.OpenAIModel)
-		setIfMissing("OLLAMA_URL", config.OllamaURL)
-		setIfMissing("OLLAMA_MODEL", config.OllamaModel)
 		setIfMissing("YOLO_ENABLED", config.YOLOEnabled)
 		setPathIfMissing("YOLO_MODEL_PATH", config.YOLOModel, filepath.Dir(path))
 		setPathIfMissing("YOLO_PYTHON", config.YOLOPython, filepath.Dir(path))

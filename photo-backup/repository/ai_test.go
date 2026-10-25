@@ -87,7 +87,7 @@ func TestFailedAIJobIsRequeuedWithCurrentPhotoMetadata(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 	repo := repository.New(db.GORM())
 	photo := createTestPhoto(t, repo, "retry.jpg")
-	job := &model.AIJob{PhotoID: photo.ID, ContentHash: "old", AnalysisProfile: "vision-tags", PromptVersion: "v1", Provider: "ollama", Model: "old", Status: "failed", AttemptCount: 4, LastError: "worker was offline"}
+	job := &model.AIJob{PhotoID: photo.ID, ContentHash: "old", AnalysisProfile: "vision-tags", PromptVersion: "v1", Provider: "local-portable", Model: "old", Status: "failed", AttemptCount: 4, LastError: "worker was offline"}
 	if err := db.GORM().Create(job).Error; err != nil {
 		t.Fatal(err)
 	}

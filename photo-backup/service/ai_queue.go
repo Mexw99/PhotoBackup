@@ -72,7 +72,7 @@ func (s *Service) runAIQueue(ctx context.Context) {
 	s.reconcileAIJobs()
 
 	// Two workers reduce total time on machines with multiple CPU cores while
-	// remaining conservative for Ollama's local vision model. Users can set
+	// remaining conservative for the local vision model. Users can set
 	// AI_MAX_CONCURRENCY=1 if RAM/CPU is limited.
 	workerCount := envInt("AI_MAX_CONCURRENCY", 2)
 	if workerCount < 1 {
@@ -317,10 +317,6 @@ func (s *Service) GetAIProviderStatus(ctx context.Context) AIProviderStatus {
 	provider, modelName := analysis.ConfiguredProviderModel()
 	if s.analyzer == nil {
 		return AIProviderStatus{Provider: provider, Model: modelName, State: "disabled", Message: "AI ถูกปิดไว้ตามค่าเริ่มต้นที่ปลอดภัย"}
-	}
-	if ollama, ok := s.analyzer.(*analysis.OllamaAnalyzer); ok {
-		health := ollama.HealthCheck(ctx)
-		return AIProviderStatus{Provider: "ollama", Model: modelName, State: health.State, Message: health.Message}
 	}
 	if multi, ok := s.analyzer.(*analysis.MultiAnalyzer); ok {
 		return AIProviderStatus{Provider: provider, Model: modelName, State: "configured", Message: fmt.Sprintf("พร้อมใช้งานหลาย Provider (%d ตัว)", multi.ProviderCount())}

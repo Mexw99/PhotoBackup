@@ -59,13 +59,13 @@ AI ไม่ทำให้ Backup ต้องรอ: งานจะถูก�
 
 ## การตั้งค่า AI แบบปลอดภัย
 
-ค่าเริ่มต้นเลือก Ollama แบบ Local เพื่อให้เปิดโปรแกรมแล้วพร้อมวิเคราะห์โดยไม่เกิดค่าใช้จ่าย Cloud
+ค่าเริ่มต้นเลือก Portable BLIP/YOLO แบบ Local เพื่อให้เปิดโปรแกรมแล้วพร้อมวิเคราะห์โดยไม่เกิดค่าใช้จ่าย Cloud
 ส่วน Gemini/OpenAI ยังคงปิดไว้และต้องเปิดใช้งานเองผ่าน environment เท่านั้น
 
 ```powershell
-$env:AI_PROVIDER = "ollama"      # หรือ gemini / openai / all
+$env:AI_PROVIDER = "blip"        # หรือ gemini / openai / all
 $env:AI_ALLOW_CLOUD = "true"      # ใช้กับ Gemini/OpenAI เมื่อยอมรับค่าใช้จ่ายแล้ว
-$env:AI_ALLOW_LOCAL = "true"      # Ollama ไม่ใช้ Cloud API และไม่มี API Key
+$env:AI_ALLOW_LOCAL = "true"      # Local AI ไม่ใช้ Cloud API และไม่มี API Key
 $env:GEMINI_API_KEYS = "KEY_1,KEY_2"
 $env:GEMINI_MODEL = "gemini-2.5-flash"
 $env:AI_MAX_CONCURRENCY = "1"
@@ -75,13 +75,13 @@ $env:AI_DAILY_LIMIT = "0"          # 0 = ไม่จำกัด; Cache Hit ไ
 
 เมื่อใช้ `AI_PROVIDER=all` ระบบจะใช้เฉพาะ Provider ที่มีการตั้งค่าและได้รับอนุญาต
 เช่น `AI_ALLOW_CLOUD=true` พร้อม Gemini/OpenAI key และ/หรือ
-`AI_ALLOW_LOCAL=true` สำหรับ Ollama จากนั้นจะหมุน Provider เมื่อคำขอหนึ่งล้มเหลว
+`AI_ALLOW_LOCAL=true` สำหรับ Portable BLIP/YOLO จากนั้นจะหมุน Provider เมื่อคำขอหนึ่งล้มเหลว
 ผลสำเร็จจะถูกเก็บ Cache ตาม ContentHash จึงไม่ส่งภาพเดิมไปวิเคราะห์ซ้ำ
 
-### Local YOLO + Ollama
+### Portable Local YOLO + BLIP
 
-ระบบ Local จะใช้ YOLO สร้าง Tag วัตถุ และใช้ Ollama สร้าง Description พร้อมกัน
-โดย YOLO worker จะเปิด Python process ค้างไว้ ไม่เปิดโมเดลใหม่ทุกภาพ
+ระบบ Local จะใช้ YOLO สร้าง Tag วัตถุ และใช้ BLIP สร้าง Description พร้อมกัน
+โดย Worker จะเปิด process ค้างไว้ ไม่เปิดโมเดลใหม่ทุกภาพ
 
 เตรียม YOLO บนเครื่องพัฒนาเพียงครั้งเดียว:
 
@@ -91,13 +91,7 @@ python -m venv .venv-yolo
 python -m pip install ultralytics onnxruntime
 ```
 
-วาง `yolo11n.pt` ไว้ข้าง `wails.exe` หรือในโฟลเดอร์โปรเจกต์ และติดตั้ง Ollama พร้อมโมเดล:
-
-```powershell
-ollama pull qwen2.5vl:3b
-```
-
-ถ้าเครื่องปลายทางใช้ path ต่างกัน ให้ตั้ง `YOLO_PYTHON`, `YOLO_MODEL_PATH` และ
+วางโมเดลและ Worker ที่ Bundle มาไว้ในโฟลเดอร์โปรเจกต์ ถ้าเครื่องปลายทางใช้ path ต่างกัน ให้ตั้ง `YOLO_PYTHON`, `YOLO_MODEL_PATH` และ
 `YOLO_SCRIPT` ใน environment หรือ `config.json` โดยไม่ต้องใส่ API Key
 
 สำหรับชุดแจกจ่าย Windows ให้รัน:
@@ -109,7 +103,7 @@ wails build
 
 สคริปต์จะสร้าง `tools/bin/windows/yolo_worker.exe` และคัดลอกโมเดลไปที่
 `models/yolo11n.pt` ทำให้เครื่องปลายทางไม่ต้องติดตั้ง Python หรือ Ultralytics
-เพื่อใช้ Tag; Ollama ยังคงเป็นตัวเลือกเสริมสำหรับ Description
+เพื่อใช้ Tag และ BLIP สร้าง Description โดยไม่ต้องติดตั้ง Ollama
 
 ### ทดสอบจาก Source โดยไม่ติดตั้ง Python/YOLO เพิ่ม
 
@@ -130,8 +124,7 @@ tools/bin/windows/yolo_worker.exe
 
 โหมด Portable นี้ให้ Tag จาก YOLO และ Description จาก BLIP โดยไม่ต้องติดตั้ง
 Python หรือ Ollama หากมีไฟล์ `models/blip-image-captioning-base` และ
-`tools/bin/windows/caption_worker.exe` ครบ ส่วน Ollama ยังคงเป็น fallback หรือ
-ตัวเลือกสำหรับเครื่องที่มีโมเดล Vision อยู่แล้ว
+`tools/bin/windows/caption_worker.exe` ครบ
 
 Caption จะถูกส่งต่อให้โมเดล `models/opus-mt-en-mul` แปลเป็นภาษาไทยแบบ Local
 ถ้าโมเดลแปลมีอยู่ครบ หากไม่มีโมเดลแปล Worker จะยังทำงานต่อและคืน Caption ภาษาอังกฤษ

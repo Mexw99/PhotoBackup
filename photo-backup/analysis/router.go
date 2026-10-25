@@ -33,29 +33,22 @@ type CombinedAnalyzer struct {
 }
 
 // LocalStatus describes the two local engines without performing inference.
-func (a *CombinedAnalyzer) LocalStatus(ctx context.Context) (string, string) {
+func (a *CombinedAnalyzer) LocalStatus(_ context.Context) (string, string) {
 	yoloReady := false
 	if yolo, ok := a.yolo.(*YOLOAnalyzer); ok {
 		yoloReady = yolo.Configured()
 	}
-	ollamaState, ollamaMessage := "disabled", "Ollama ไม่ได้ตั้งค่า"
-	if vision, ok := a.vision.(*OllamaAnalyzer); ok {
-		health := vision.HealthCheck(ctx)
-		ollamaState, ollamaMessage = health.State, health.Message
-	} else if blip, ok := a.vision.(*BLIPAnalyzer); ok {
-		if blip.Configured() {
-			ollamaState, ollamaMessage = "ready", "BLIP พร้อมใช้งาน"
-		} else {
-			ollamaState, ollamaMessage = "not_running", "ไม่พบ BLIP worker หรือโมเดล"
-		}
+	blipState, blipMessage := "not_running", "ไม่พบ BLIP worker หรือโมเดล"
+	if blip, ok := a.vision.(*BLIPAnalyzer); ok && blip.Configured() {
+		blipState, blipMessage = "ready", "BLIP พร้อมใช้งาน"
 	}
-	if yoloReady && ollamaState == "ready" {
+	if yoloReady && blipState == "ready" {
 		return "ready", "YOLO และตัวสร้างคำอธิบายภาพพร้อมใช้งาน"
 	}
 	if yoloReady {
-		return "partial", "YOLO พร้อมใช้งาน; Ollama ยังไม่พร้อม: " + ollamaMessage
+		return "partial", "YOLO พร้อมใช้งาน; BLIP ยังไม่พร้อม: " + blipMessage
 	}
-	return "error", "YOLO ยังไม่พร้อม; " + ollamaMessage
+	return "error", "YOLO ยังไม่พร้อม; " + blipMessage
 }
 
 func (a *CombinedAnalyzer) Analyze(path string) (AIResult, error) {
@@ -102,14 +95,22 @@ const (
 	DefaultPromptVersion   = "v1"
 )
 
-// NewAnalyzerFromEnv creates one explicitly selected provider. Local Ollama is
-// the safe default; cloud providers remain opt-in so opening the application
+// NewAnalyzerFromEnv creates one explicitly selected provider. Portable BLIP is
+// the safe local default; cloud providers remain opt-in so opening the application
 // cannot unexpectedly create charges.
 func NewAnalyzerFromEnv() ImageAnalyzer {
 	loadPortableConfig()
 	providerSetting := strings.ToLower(strings.TrimSpace(os.Getenv("AI_PROVIDER")))
 	if providerSetting == "" {
-		providerSetting = "ollama"
+		providerSetting = "blip"
+	}
+	// Older config files may still contain a removed local provider name.
+	// Treat unknown local values as the bundled BLIP pipeline so upgrades do
+	// not silently disable AI.
+	if providerSetting != "all" && providerSetting != "blip" &&
+		providerSetting != "gemini" && providerSetting != "openai" &&
+		providerSetting != "gpt" && !strings.Contains(providerSetting, ",") {
+		providerSetting = "blip"
 	}
 	if providerSetting == "all" || strings.Contains(providerSetting, ",") {
 		providers := make([]ImageAnalyzer, 0, 3)
@@ -133,19 +134,19 @@ func NewAnalyzerFromEnv() ImageAnalyzer {
 			}
 		}
 		if localAIEnabled() {
-			providers = append(providers, NewOllamaAnalyzerFromEnv())
+			providers = append(providers, &CombinedAnalyzer{yolo: NewYOLOAnalyzerFromEnv(), vision: newLocalCaptionAnalyzer()})
 		}
 		if len(providers) == 0 {
 			return nil
 		}
 		return &MultiAnalyzer{providers: providers}
 	}
-	if providerSetting == "ollama" || providerSetting == "blip" {
+	if providerSetting == "blip" {
 		if !localAIEnabled() {
 			return nil
 		}
 		if strings.EqualFold(strings.TrimSpace(os.Getenv("YOLO_ENABLED")), "false") {
-			return NewOllamaAnalyzerFromEnv()
+			return newLocalCaptionAnalyzer()
 		}
 		return &CombinedAnalyzer{yolo: NewYOLOAnalyzerFromEnv(), vision: newLocalCaptionAnalyzer()}
 	}
@@ -163,15 +164,7 @@ func NewAnalyzerFromEnv() ImageAnalyzer {
 }
 
 func newLocalCaptionAnalyzer() ImageAnalyzer {
-	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AI_CAPTION_PROVIDER")))
-	if provider == "ollama" {
-		return NewOllamaAnalyzerFromEnv()
-	}
-	blip := NewBLIPAnalyzerFromEnv()
-	if blip.Configured() {
-		return blip
-	}
-	return NewOllamaAnalyzerFromEnv()
+	return NewBLIPAnalyzerFromEnv()
 }
 
 func envBool(name string) bool {
@@ -179,8 +172,8 @@ func envBool(name string) bool {
 	return err == nil && value
 }
 
-// localAIEnabled enables Ollama by default when the setting is absent. An
-// explicit false still disables it for CI or machines without Ollama.
+// localAIEnabled enables bundled local AI by default. An explicit false still
+// disables it for CI or machines without the local models.
 func localAIEnabled() bool {
 	value, present := os.LookupEnv("AI_ALLOW_LOCAL")
 	if !present || strings.TrimSpace(value) == "" {
@@ -195,12 +188,6 @@ func ConfiguredProviderModel() (string, string) {
 	loadPortableConfig()
 	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AI_PROVIDER")))
 	if provider == "" {
-		provider = "ollama"
-	}
-	if provider == "ollama" && strings.EqualFold(strings.TrimSpace(os.Getenv("AI_CAPTION_PROVIDER")), "blip") {
-		provider = "blip"
-	}
-	if provider == "ollama" && NewBLIPAnalyzerFromEnv().Configured() {
 		provider = "blip"
 	}
 	switch provider {
@@ -220,15 +207,6 @@ func ConfiguredProviderModel() (string, string) {
 		model = strings.TrimSpace(os.Getenv("OPENAI_MODEL"))
 		if model == "" {
 			model = "gpt-4.1-mini"
-		}
-	case "ollama":
-		model = strings.TrimSpace(os.Getenv("OLLAMA_MODEL"))
-		if model == "" {
-			model = "qwen2.5vl:3b"
-		}
-		if !strings.EqualFold(strings.TrimSpace(os.Getenv("YOLO_ENABLED")), "false") {
-			model = "yolo11n+" + model
-			provider = "local-hybrid"
 		}
 	case "blip":
 		model = "blip-image-captioning-base"

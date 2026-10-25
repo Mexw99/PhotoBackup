@@ -11,7 +11,7 @@ PhotoBackup ใช้ Wails v2 + Nuxt 4 + Go + SQLite/GORM สำหรับย
 | Wails + Nuxt, Windows/macOS | `main.go`, `app*.go`, `frontend/app/pages/`, `wails.json` |
 | SQLite + GORM | `database/database.go`, `model/`, `repository/` |
 | Backup เทียบเท่ากลางภาค | `backup/transfer.go`, `backup/verify.go`, `service/backup.go` |
-| วิเคราะห์ Description/Tag ด้วย AI | `analysis/gemini.go`, `analysis/openai.go`, `analysis/ollama.go`, `service/ai_queue.go` |
+| วิเคราะห์ Description/Tag ด้วย AI | `analysis/yolo.go`, `analysis/blip.go`, `service/ai_queue.go` |
 | ค้นหาหลายรูปและ Tag Cloud | `repository/search.go`, `app_photos.go`, `usePhotoSearch.ts`, `tag-cloud.vue` |
 
 ## Flow สำคัญที่ควรอธิบายใน Demo
@@ -69,9 +69,9 @@ HTTP 429/5xx และ network error เป็นกลุ่มที่ Retry 
 `AI_DAILY_LIMIT` นับคำขอที่เรียก Provider จริงในตาราง `ai_usages`; Cache Hit ไม่ถูกนับ
 Error ที่เก็บใน `AIJob.LastError` จะ redact ค่า Key จาก environment
 
-### 6. Local Ollama และ Cloud Preprocessing
+### 6. Portable Local AI และ Cloud Preprocessing
 
-เมื่อเลือก Ollamaและอนุญาต Local แล้ว `OllamaAnalyzer.HealthCheck` เรียก `/api/tags` เพื่อแยก `ready`, `not_running`, `model_missing`, `model_unusable`
+เมื่ออนุญาต Local แล้วระบบตรวจความพร้อมของ Portable YOLO และ BLIP จากไฟล์ Worker/โมเดลที่ Bundle ไว้
 ไม่ดาวน์โหลด Model และไม่บังคับ GPU NVIDIA; CPU ใช้ได้แต่ช้ากว่า ควรตั้ง `AI_MAX_CONCURRENCY=1`
 
 Gemini/OpenAI ใช้ `readImageForCloudAI` resize ภาพใหญ่ในหน่วยความจำด้านยาวไม่เกิน 1600px
@@ -122,8 +122,8 @@ cd ..
 wails build
 ```
 
-Unit/Integration tests ใช้ไฟล์ชั่วคราวและ Fake Analyzer/HTTP test เท่านั้น ไม่เรียก Gemini, OpenAI หรือ Ollama จริง
-ยังต้องทดสอบแยกบน macOS, Flash Drive จริง, Ollama จริง และ Cloud API จริงก่อนสาธิต Final
+Unit/Integration tests ใช้ไฟล์ชั่วคราวและ Fake Analyzer/HTTP test เท่านั้น ไม่เรียก Gemini หรือ OpenAI จริง
+ยังต้องทดสอบแยกบน macOS, Flash Drive จริง และ Cloud API จริงก่อนสาธิต Final
 
 ## งาน Performance ที่แยกไว้
 

@@ -50,7 +50,7 @@ photo-backup/
 │   ├── hash.go                 # SHA-256 แบบ Streaming
 │   ├── validation.go           # ตรวจ header รูปภาพด้วย DecodeConfig
 │   ├── preprocess.go           # ลดขนาดเฉพาะ payload Cloud ในหน่วยความจำ
-│   └── ollama_health.go        # ตรวจความพร้อม Ollama
+│   └── blip.go                 # สร้างคำอธิบายภาพด้วย BLIP แบบ Local
 ├── frontend/
 │   ├── app/
 │   │   ├── app.vue             # NuxtLayout ครอบ NuxtPage

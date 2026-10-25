@@ -32,27 +32,26 @@ func TestNewAnalyzerFromEnvDoesNotEnableCloudWithoutConsent(t *testing.T) {
 	}
 }
 
-func TestNewAnalyzerFromEnvDefaultsToLocalOllama(t *testing.T) {
+func TestNewAnalyzerFromEnvDefaultsToPortableLocalAI(t *testing.T) {
 	t.Setenv("AI_PROVIDER", "")
 	t.Setenv("AI_ALLOW_LOCAL", "")
 	t.Setenv("AI_ALLOW_CLOUD", "false")
-	t.Setenv("OLLAMA_MODEL", "qwen2.5vl:3b")
 
 	analyzer := NewAnalyzerFromEnv()
 	if _, ok := analyzer.(*CombinedAnalyzer); !ok {
 		t.Fatalf("default analyzer = %T, want *CombinedAnalyzer", analyzer)
 	}
 	provider, model := ConfiguredProviderModel()
-	if provider != "local-hybrid" || model != "yolo11n+qwen2.5vl:3b" {
-		t.Fatalf("default metadata = %q/%q, want local-hybrid/yolo11n+qwen2.5vl:3b", provider, model)
+	if provider != "local-portable" || model != "yolo11n+blip-image-captioning-base" {
+		t.Fatalf("default metadata = %q/%q, want local-portable/yolo11n+blip-image-captioning-base", provider, model)
 	}
 }
 
-func TestExplicitLocalDisableStillDisablesOllama(t *testing.T) {
-	t.Setenv("AI_PROVIDER", "ollama")
+func TestExplicitLocalDisableStillDisablesPortableLocalAI(t *testing.T) {
+	t.Setenv("AI_PROVIDER", "blip")
 	t.Setenv("AI_ALLOW_LOCAL", "false")
 	if analyzer := NewAnalyzerFromEnv(); analyzer != nil {
-		t.Fatalf("ollama was enabled despite explicit AI_ALLOW_LOCAL=false: %T", analyzer)
+		t.Fatalf("portable local AI was enabled despite explicit AI_ALLOW_LOCAL=false: %T", analyzer)
 	}
 }
 
@@ -74,7 +73,7 @@ type fixedAnalyzer struct {
 func TestCombinedAnalyzerKeepsYOLOTagsWhenVisionIsUnavailable(t *testing.T) {
 	analyzer := &CombinedAnalyzer{
 		yolo:   fixedAnalyzer{result: AIResult{Tags: []string{"cat"}}},
-		vision: fixedAnalyzer{err: &ProviderError{Message: "Ollama is not running"}},
+		vision: fixedAnalyzer{err: &ProviderError{Message: "BLIP is not available"}},
 	}
 	result, err := analyzer.Analyze("test.jpg")
 	if err != nil {
