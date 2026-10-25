@@ -128,8 +128,10 @@ tools/bin/windows/yolo_worker.exe
 `git lfs pull` หนึ่งครั้งหลัง clone เพื่อดึงโมเดลและ worker ตัวจริงลงมา
 เนื่องจากไฟล์ worker มีขนาดใหญ่และไม่สามารถเก็บเป็นไฟล์ Git ปกติได้
 
-โหมด Portable นี้ให้ Tag จาก YOLO เป็นหลัก ส่วน Description จาก Ollama เป็น
-ความสามารถเสริมเฉพาะเครื่องที่ติดตั้ง Ollama และโมเดล Vision แล้ว
+โหมด Portable นี้ให้ Tag จาก YOLO และ Description จาก BLIP โดยไม่ต้องติดตั้ง
+Python หรือ Ollama หากมีไฟล์ `models/blip-image-captioning-base` และ
+`tools/bin/windows/caption_worker.exe` ครบ ส่วน Ollama ยังคงเป็น fallback หรือ
+ตัวเลือกสำหรับเครื่องที่มีโมเดล Vision อยู่แล้ว
 
 Worker มีขนาดใหญ่เนื่องจากรวม PyTorch/Ultralytics ไว้ภายใน จึงควรใช้ Git LFS
 หรือส่งเป็น ZIP หาก Repository ไม่รองรับไฟล์ขนาดใหญ่

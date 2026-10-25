@@ -42,9 +42,15 @@ func (a *CombinedAnalyzer) LocalStatus(ctx context.Context) (string, string) {
 	if vision, ok := a.vision.(*OllamaAnalyzer); ok {
 		health := vision.HealthCheck(ctx)
 		ollamaState, ollamaMessage = health.State, health.Message
+	} else if blip, ok := a.vision.(*BLIPAnalyzer); ok {
+		if blip.Configured() {
+			ollamaState, ollamaMessage = "ready", "BLIP พร้อมใช้งาน"
+		} else {
+			ollamaState, ollamaMessage = "not_running", "ไม่พบ BLIP worker หรือโมเดล"
+		}
 	}
 	if yoloReady && ollamaState == "ready" {
-		return "ready", "YOLO และ Ollama พร้อมใช้งาน"
+		return "ready", "YOLO และตัวสร้างคำอธิบายภาพพร้อมใช้งาน"
 	}
 	if yoloReady {
 		return "partial", "YOLO พร้อมใช้งาน; Ollama ยังไม่พร้อม: " + ollamaMessage
@@ -134,14 +140,14 @@ func NewAnalyzerFromEnv() ImageAnalyzer {
 		}
 		return &MultiAnalyzer{providers: providers}
 	}
-	if providerSetting == "ollama" {
+	if providerSetting == "ollama" || providerSetting == "blip" {
 		if !localAIEnabled() {
 			return nil
 		}
 		if strings.EqualFold(strings.TrimSpace(os.Getenv("YOLO_ENABLED")), "false") {
 			return NewOllamaAnalyzerFromEnv()
 		}
-		return &CombinedAnalyzer{yolo: NewYOLOAnalyzerFromEnv(), vision: NewOllamaAnalyzerFromEnv()}
+		return &CombinedAnalyzer{yolo: NewYOLOAnalyzerFromEnv(), vision: newLocalCaptionAnalyzer()}
 	}
 	if !envBool("AI_ALLOW_CLOUD") {
 		return nil
@@ -154,6 +160,18 @@ func NewAnalyzerFromEnv() ImageAnalyzer {
 	default:
 		return nil
 	}
+}
+
+func newLocalCaptionAnalyzer() ImageAnalyzer {
+	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AI_CAPTION_PROVIDER")))
+	if provider == "ollama" {
+		return NewOllamaAnalyzerFromEnv()
+	}
+	blip := NewBLIPAnalyzerFromEnv()
+	if blip.Configured() {
+		return blip
+	}
+	return NewOllamaAnalyzerFromEnv()
 }
 
 func envBool(name string) bool {
@@ -178,6 +196,12 @@ func ConfiguredProviderModel() (string, string) {
 	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AI_PROVIDER")))
 	if provider == "" {
 		provider = "ollama"
+	}
+	if provider == "ollama" && strings.EqualFold(strings.TrimSpace(os.Getenv("AI_CAPTION_PROVIDER")), "blip") {
+		provider = "blip"
+	}
+	if provider == "ollama" && NewBLIPAnalyzerFromEnv().Configured() {
+		provider = "blip"
 	}
 	switch provider {
 	case "gpt":
@@ -205,6 +229,12 @@ func ConfiguredProviderModel() (string, string) {
 		if !strings.EqualFold(strings.TrimSpace(os.Getenv("YOLO_ENABLED")), "false") {
 			model = "yolo11n+" + model
 			provider = "local-hybrid"
+		}
+	case "blip":
+		model = "blip-image-captioning-base"
+		if !strings.EqualFold(strings.TrimSpace(os.Getenv("YOLO_ENABLED")), "false") {
+			model = "yolo11n+" + model
+			provider = "local-portable"
 		}
 	case "multi":
 		model = "multi-provider"

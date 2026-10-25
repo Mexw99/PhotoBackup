@@ -38,3 +38,20 @@ New-Item -ItemType Directory -Force "models" | Out-Null
 Copy-Item -Force "dist\yolo_worker.exe" "tools\bin\windows\yolo_worker.exe"
 Copy-Item -Force $ModelPath "models\yolo11n.pt"
 Write-Host "Portable YOLO assets are in tools\bin\windows and models"
+
+$blipModelPath = "models\blip-image-captioning-base"
+if (Test-Path $blipModelPath) {
+  if (-not (Test-Path ".venv-blip\Scripts\pyinstaller.exe")) {
+    throw "BLIP model exists but .venv-blip with PyInstaller was not found"
+  }
+  & .\.venv-blip\Scripts\pyinstaller.exe --noconfirm --clean --onefile `
+    --name caption_worker `
+    --collect-all transformers `
+    --collect-all torch `
+    --collect-all PIL `
+    --hidden-import torchvision `
+    tools\caption_worker.py
+  if ($LASTEXITCODE -ne 0) { throw "BLIP PyInstaller failed" }
+  Copy-Item -Force "dist\caption_worker.exe" "tools\bin\windows\caption_worker.exe"
+  Write-Host "Portable BLIP assets are in tools\bin\windows and models\blip-image-captioning-base"
+}

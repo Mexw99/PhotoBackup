@@ -7,17 +7,23 @@ frontend/node_modules*
 photo-backup.db
 config.json
 .venv-yolo/
+.venv-blip/
 runs/
 *.pt
 *.onnx
 build/yolo_worker/
+build/caption_worker/
 dist/
 yolo_worker.spec
+caption_worker.spec
 photo-backup.db-*
 
 # Portable local AI assets intentionally committed for development/testing.
 !models/
 !models/yolo11n.pt
+!models/blip-image-captioning-base/
+!models/blip-image-captioning-base/**
 !tools/bin/
 !tools/bin/windows/
 !tools/bin/windows/yolo_worker.exe
+!tools/bin/windows/caption_worker.exe
