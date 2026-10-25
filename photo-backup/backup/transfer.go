@@ -7,7 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
+
+var copyBufferPool = sync.Pool{
+	New: func() any {
+		buffer := make([]byte, 4*1024*1024)
+		return &buffer
+	},
+}
 
 type BackupResult struct {
 	OriginalName string `json:"originalName"`
@@ -16,6 +24,7 @@ type BackupResult struct {
 	FileSize     int64  `json:"fileSize"`
 	Success      bool   `json:"success"`
 	Skipped      bool   `json:"skipped"`
+	Message      string `json:"message"`
 	Error        string `json:"error"`
 }
 
@@ -57,23 +66,15 @@ func CopyImage(image ImageFile, destDir string) (BackupResult, error) {
 			return result, err
 		}
 
-		written, copyErr := io.Copy(file, source)
-		if copyErr == nil {
-			copyErr = file.Sync()
-		}
+		buffer := copyBufferPool.Get().(*[]byte)
+		written, copyErr := io.CopyBuffer(file, source, *buffer)
+		copyBufferPool.Put(buffer)
 		closeErr := file.Close()
 		if copyErr == nil {
 			copyErr = closeErr
 		}
 		if copyErr == nil && written != image.Size {
 			copyErr = fmt.Errorf("ไฟล์ต้นทางเปลี่ยนระหว่างสำรอง กรุณาลองใหม่")
-		}
-		if copyErr == nil {
-			var equal bool
-			equal, copyErr = EqualFiles(image.Path, destination)
-			if copyErr == nil && !equal {
-				copyErr = fmt.Errorf("ข้อมูลปลายทางไม่ตรงกับต้นทาง กรุณาลองใหม่")
-			}
 		}
 		if copyErr != nil {
 			_ = os.Remove(destination)

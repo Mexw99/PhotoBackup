@@ -27,7 +27,7 @@ func newService(t *testing.T) *service.Service {
 			t.Error(err)
 		}
 	})
-	return service.New(repository.New(db.GORM()))
+	return service.NewWithAnalyzer(repository.New(db.GORM()), nil)
 }
 
 // Exercise the new service boundary with real temporary files and SQLite.
@@ -67,8 +67,8 @@ func TestBackupTagAndSearch(t *testing.T) {
 	if err != nil || len(photos) != 1 {
 		t.Fatalf("photos: %+v, %v", photos, err)
 	}
-	if photos[0].ColorTag != "สีแดง" {
-		t.Fatalf("missing automatic color: %+v", photos[0])
+	if photos[0].AnalysisStatus != "pending" || photos[0].Description != "" || len(photos[0].Tags) != 0 {
+		t.Fatalf("unexpected automatic analysis state: %+v", photos[0])
 	}
 	if _, err := os.Stat(imagePath); !os.IsNotExist(err) {
 		t.Fatalf("original remains after move: %v", err)
@@ -78,7 +78,7 @@ func TestBackupTagAndSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	found, err := s.SearchPhotos([]string{"HOLIDAY"})
-	if err != nil || len(found) != 1 || len(found[0].Tags) != 2 {
+	if err != nil || len(found) != 1 || len(found[0].Tags) != 1 {
 		t.Fatalf("search: %+v, %v", found, err)
 	}
 	if err := s.RemoveTagFromPhoto(photos[0].ID, tag.ID); err != nil {

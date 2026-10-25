@@ -10,6 +10,7 @@ export type BackupResult = Pick<
   | "fileSize"
   | "success"
   | "skipped"
+  | "message"
   | "error"
 >;
 export type BackupSummary = Pick<
@@ -22,4 +23,13 @@ export interface BackupProgress {
   current: number;
   total: number;
   name: string;
+}
+
+export interface IntegrityResult {
+  filename: string;
+  path: string;
+  status: string;
+  message: string;
+  expectedSize: number;
+  actualSize: number;
 }

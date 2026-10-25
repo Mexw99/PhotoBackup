@@ -6,9 +6,15 @@ import {
   SelectSourceFolder,
   SelectDestFolder,
   StartBackup,
+  CheckBackup,
 } from "~~/wailsjs/go/main/App";
 import { EventsOn } from "~~/wailsjs/runtime/runtime";
-import type { ImageFile, BackupSummary, BackupProgress } from "~/types/backup";
+import type {
+  ImageFile,
+  BackupSummary,
+  BackupProgress,
+  IntegrityResult,
+} from "~/types/backup";
 
 export function useBackup() {
   const sourcePath = ref("");
@@ -30,6 +36,9 @@ export function useBackup() {
     failed: 0,
     results: [],
   });
+  const integrityLoading = ref(false);
+  const integrityDone = ref(false);
+  const integrityResults = ref<IntegrityResult[]>([]);
 
   let stopProgress: (() => void) | undefined;
   onUnmounted(() => stopProgress?.());
@@ -179,6 +188,24 @@ export function useBackup() {
     }
   }
 
+  async function checkDestination() {
+    if (!destPath.value) {
+      errorMessage.value = "กรุณาเลือกโฟลเดอร์ปลายทางก่อนตรวจสอบ";
+      return;
+    }
+    errorMessage.value = "";
+    integrityLoading.value = true;
+    integrityDone.value = false;
+    try {
+      integrityResults.value = (await CheckBackup(destPath.value)) ?? [];
+      integrityDone.value = true;
+    } catch (error) {
+      errorMessage.value = String(error || "ตรวจสอบไฟล์ปลายทางไม่สำเร็จ");
+    } finally {
+      integrityLoading.value = false;
+    }
+  }
+
   function resetBackupState() {
     backupDone.value = false;
     progressCurrent.value = 0;
@@ -213,6 +240,9 @@ export function useBackup() {
     progressTotal,
     progressName,
     backupSummary,
+    integrityLoading,
+    integrityDone,
+    integrityResults,
     progressPercent,
     successResults,
     skippedResults,
@@ -224,6 +254,7 @@ export function useBackup() {
     clearDestFolder,
     saveSettings,
     startBackup,
+    checkDestination,
     resetBackupState,
     formatBytes,
   };

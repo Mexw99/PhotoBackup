@@ -1,4 +1,4 @@
-import { ref, onMounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import {
   AddTagToPhotos,
   DeleteTag,
@@ -7,6 +7,7 @@ import {
   RemoveTagFromPhoto,
 } from "~~/wailsjs/go/main/App";
 import type { PhotoItem, TagCloudItem } from "~/types/photo";
+import { EventsOn } from "~~/wailsjs/runtime/runtime";
 
 export function usePhotoTags() {
   const photos = ref<PhotoItem[]>([]);
@@ -86,7 +87,12 @@ export function usePhotoTags() {
     }
   }
 
-  onMounted(loadData);
+  let stopAnalysis: (() => void) | undefined;
+  onMounted(() => {
+    stopAnalysis = EventsOn("photo:analysis", loadData);
+    loadData();
+  });
+  onUnmounted(() => stopAnalysis?.());
 
   return {
     photos,

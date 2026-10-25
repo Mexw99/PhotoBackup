@@ -2,7 +2,7 @@
   <div class="tags-page">
     <header>
       <h1>จัดการ Tag</h1>
-      <p>ระบบเพิ่ม Tag สีหลักเมื่อ Backup รูปภาพ และสามารถเลือกเพิ่ม Tag เองได้</p>
+      <p>AI จะสร้าง Tag และคำอธิบายหลัง Backup เสร็จ และสามารถเพิ่ม Tag เองได้</p>
     </header>
 
     <section class="panel">

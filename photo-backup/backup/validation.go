@@ -2,10 +2,28 @@ package backup
 
 import (
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// ValidateImage checks the image header without decoding pixels or analyzing
+// colors. It keeps invalid files from being copied into the photo library.
+func ValidateImage(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if _, _, err := image.DecodeConfig(file); err != nil {
+		return fmt.Errorf("ไฟล์รูปภาพไม่ถูกต้อง: %w", err)
+	}
+	return nil
+}
 
 // ValidateFolders ตรวจโฟลเดอร์ก่อนเริ่มงาน เพื่อไม่สำรองวนเข้าต้นทางตัวเอง
 func ValidateFolders(sourcePath, destPath string) error {
