@@ -5,7 +5,7 @@
       <div class="header-titles">
         <h1 class="page-title">ค้นหารูปภาพ</h1>
         <p class="page-description">
-          ค้นหาชื่อไฟล์หรือคำอธิบายภาพจาก AI แล้วคลิก Tag จาก Tag Cloud เพื่อกรองรูปภาพ
+          ค้นหาจากชื่อไฟล์ แล้วคลิก Tag จาก Tag Cloud เพื่อกรองรูปภาพ
         </p>
       </div>
       <div v-if="!initialLoading && !error" class="header-stats">
@@ -30,9 +30,9 @@
     <!-- แผงค้นหาและตัวกรอง -->
     <section class="panel search-controls-panel">
       <form class="text-search" @submit.prevent="executeSearch">
-        <label for="photo-search">ค้นหาชื่อไฟล์หรือคำอธิบายภาพ</label>
+        <label for="photo-search">ค้นหาชื่อไฟล์</label>
         <div class="text-search-row">
-          <input id="photo-search" v-model="searchText" type="search" placeholder="เช่น ทะเล หรือ IMG_001.jpg" />
+          <input id="photo-search" v-model="searchText" type="search" placeholder="เช่น IMG_001.jpg หรือ cat" />
           <button type="submit" class="retry-btn" :disabled="initialLoading || searching">
             ค้นหา
           </button>

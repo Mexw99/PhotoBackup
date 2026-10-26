@@ -30,6 +30,10 @@ type YOLOAnalyzer struct {
 func NewYOLOAnalyzerFromEnv() *YOLOAnalyzer {
 	script := findYOLOFile("YOLO_SCRIPT", filepath.Join("tools", "yolo_worker.py"))
 	model := findYOLOFile("YOLO_MODEL_PATH", "yolo11n.pt")
+	worker := findYOLOFile("YOLO_WORKER", workerFileName())
+	if runtime.GOOS != "windows" && strings.HasSuffix(strings.ToLower(worker), ".exe") {
+		worker = ""
+	}
 	// Some Wails launchers and `go test` use a working directory below the
 	// project root. Once the script is found, use its project root to locate
 	// the virtual environment and model as well.
@@ -45,14 +49,14 @@ func NewYOLOAnalyzerFromEnv() *YOLOAnalyzer {
 			}
 		}
 		if python := findYOLOPythonIn(projectRoot); python != "" {
-			return &YOLOAnalyzer{python: python, script: script, model: model, worker: findYOLOFile("YOLO_WORKER", workerFileName())}
+			return &YOLOAnalyzer{python: python, script: script, model: model, worker: worker}
 		}
 	}
 	return &YOLOAnalyzer{
-		python: findYOLOPython(),
+		python: findLocalPython(),
 		script: script,
 		model:  model,
-		worker: findYOLOFile("YOLO_WORKER", workerFileName()),
+		worker: worker,
 	}
 }
 
@@ -167,22 +171,34 @@ func findYOLOPython() string {
 			return python
 		}
 	}
-	return "python"
+	return findLocalPython()
 }
 
 func findYOLOPythonIn(root string) string {
-	if runtime.GOOS == "windows" {
-		path := filepath.Join(root, ".venv-yolo", "Scripts", "python.exe")
+	venvNames := []string{".venv-ai", ".venv-yolo", ".venv-blip"}
+	for _, venvName := range venvNames {
+		path := filepath.Join(root, venvName, "bin", "python")
+		if runtime.GOOS == "windows" {
+			path = filepath.Join(root, venvName, "Scripts", "python.exe")
+		}
 		if fileExists(path) {
 			return path
 		}
-		return ""
-	}
-	path := filepath.Join(root, ".venv-yolo", "bin", "python")
-	if fileExists(path) {
-		return path
 	}
 	return ""
+}
+
+func findLocalPython() string {
+	names := []string{"python3", "python"}
+	if runtime.GOOS == "windows" {
+		names = []string{"python"}
+	}
+	for _, name := range names {
+		if path, err := exec.LookPath(name); err == nil {
+			return path
+		}
+	}
+	return names[0]
 }
 
 func workerFileName() string {

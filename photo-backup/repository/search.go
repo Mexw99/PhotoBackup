@@ -33,11 +33,7 @@ func (r *Repository) SearchPhotos(query string, tagNames []string) ([]model.Phot
 	photoQuery := r.db.Preload("Tags").Order("backed_up_at DESC")
 	if query = strings.TrimSpace(query); query != "" {
 		pattern := "%" + strings.ToLower(query) + "%"
-		photoQuery = photoQuery.Where(
-			"LOWER(original_name) LIKE ? OR LOWER(description) LIKE ?",
-			pattern,
-			pattern,
-		)
+		photoQuery = photoQuery.Where("LOWER(original_name) LIKE ?", pattern)
 	}
 
 	if len(lowerTags) > 0 {

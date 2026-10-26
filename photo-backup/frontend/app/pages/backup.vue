@@ -184,7 +184,7 @@
       </div>
 
       <div v-if="backupDone && skippedResults.length > 0" class="skipped-list">
-        <h3>รูปที่ใช้ไฟล์ปลายทางเดิมและย้ายสำเร็จ:</h3>
+        <h3>รูปที่ไม่ได้ย้าย:</h3>
         <ul class="file-list">
           <li
             v-for="result in skippedResults"
@@ -192,7 +192,7 @@
             class="file-item"
           >
             <span class="file-name">{{ result.originalName }}</span>
-            <span class="file-size">ตรวจไฟล์เดิมแล้ว ลบต้นทางสำเร็จ</span>
+            <span class="file-size">{{ result.message || "ใช้ไฟล์ปลายทางเดิม" }}</span>
           </li>
         </ul>
       </div>

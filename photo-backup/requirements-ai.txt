@@ -1,0 +1,6 @@
+Pillow>=10,<13
+torch>=2.2,<3
+torchvision>=0.17,<1
+transformers>=4.40,<5
+sentencepiece>=0.2,<1
+ultralytics>=8.3,<9

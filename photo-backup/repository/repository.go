@@ -17,6 +17,7 @@ type Store interface {
 	WithContext(context.Context) Store
 	CreatePhoto(*model.Photo) error
 	FindBackup(string, string) (*model.Photo, error)
+	BackupPathsInDestination(string) ([]string, error)
 	SaveBackup(*model.Photo) error
 	SaveAIAnalysis(uint, string, []string) error
 	FindPhoto(uint) (*model.Photo, error)

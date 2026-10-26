@@ -9,10 +9,10 @@
   "blipTranslatorModelPath": "models/opus-mt-en-mul",
   "blipPython": "",
   "blipScript": "tools/caption_worker.py",
-  "blipWorker": "tools/bin/windows/caption_worker.exe",
+  "blipWorker": "",
   "yoloEnabled": "true",
   "yoloModelPath": "models/yolo11n.pt",
   "yoloPython": "",
   "yoloScript": "tools/yolo_worker.py",
-  "yoloWorker": "tools/bin/windows/yolo_worker.exe"
+  "yoloWorker": ""
 }

@@ -83,18 +83,42 @@ $env:AI_DAILY_LIMIT = "0"          # 0 = ไม่จำกัด; Cache Hit ไ
 ระบบ Local จะใช้ YOLO สร้าง Tag วัตถุ และใช้ BLIP สร้าง Description พร้อมกัน
 โดย Worker จะเปิด process ค้างไว้ ไม่เปิดโมเดลใหม่ทุกภาพ
 
+#### macOS / Linux จาก Source
+
+บน macOS และ Linux ให้ใช้ Python worker จาก `tools/*.py` โดยไม่ใช้ไฟล์ `.exe`:
+
+```bash
+chmod +x scripts/setup-ai.sh
+./scripts/setup-ai.sh
+cp config.example.json config.json
+wails dev
+```
+
+สคริปต์จะสร้าง `.venv-ai` และติดตั้ง `torch`, `transformers`, `sentencepiece` และ
+`ultralytics` ให้ทั้ง BLIP และ YOLO ใช้ Python environment เดียวกัน โดยโปรแกรมจะเลือก
+`python3` และไฟล์ `.py` อัตโนมัติบน macOS/Linux
+
+ถ้าใช้ Mac ที่มี Apple Silicon สามารถทดลองเร่ง YOLO ด้วย MPS ได้:
+
+```bash
+export YOLO_DEVICE=mps
+```
+
+#### Windows จาก Source
+
 เตรียม YOLO บนเครื่องพัฒนาเพียงครั้งเดียว:
 
 ```powershell
-python -m venv .venv-yolo
-.\.venv-yolo\Scripts\Activate.ps1
-python -m pip install ultralytics onnxruntime
+python -m venv .venv-ai
+.\.venv-ai\Scripts\Activate.ps1
+python -m pip install -r requirements-ai.txt
 ```
 
-วางโมเดลและ Worker ที่ Bundle มาไว้ในโฟลเดอร์โปรเจกต์ ถ้าเครื่องปลายทางใช้ path ต่างกัน ให้ตั้ง `YOLO_PYTHON`, `YOLO_MODEL_PATH` และ
-`YOLO_SCRIPT` ใน environment หรือ `config.json` โดยไม่ต้องใส่ API Key
+วางโมเดลไว้ในโฟลเดอร์โปรเจกต์ ถ้าเครื่องปลายทางใช้ path ต่างกัน ให้ตั้ง
+`YOLO_PYTHON`, `YOLO_MODEL_PATH`, `BLIP_PYTHON` และ `BLIP_MODEL_PATH` ใน environment
+หรือ `config.json` โดยไม่ต้องใส่ API Key
 
-สำหรับชุดแจกจ่าย Windows ให้รัน:
+สำหรับชุดแจกจ่าย Windows ที่ไม่ต้องติดตั้ง Python ให้รัน:
 
 ```powershell
 wails build
@@ -105,7 +129,7 @@ wails build
 `models/yolo11n.pt` ทำให้เครื่องปลายทางไม่ต้องติดตั้ง Python หรือ Ultralytics
 เพื่อใช้ Tag และ BLIP สร้าง Description โดยไม่ต้องติดตั้ง Ollama
 
-### ทดสอบจาก Source โดยไม่ติดตั้ง Python/YOLO เพิ่ม
+### Worker ที่ Bundle มา
 
 เมื่อ Repository มีไฟล์สองรายการนี้แล้ว:
 
@@ -114,17 +138,16 @@ models/yolo11n.pt
 tools/bin/windows/yolo_worker.exe
 ```
 
-สมาชิกที่ติดตั้ง Go, Node.js และ Wails CLI ตามปกติสามารถสั่ง `wails dev`
-จากโฟลเดอร์ `photo-backup` แล้วใช้ Backup และวิเคราะห์ Tag ด้วย YOLO ได้ทันที
-โดยไม่ต้องติดตั้ง Python, Ultralytics หรือ Ollama เพิ่มในเครื่องนั้น
+บน Windows สมาชิกที่มีไฟล์ worker และโมเดลครบสามารถสั่ง `wails dev` จากโฟลเดอร์
+`photo-backup` ได้โดยไม่ต้องติดตั้ง Python หรือแพ็กเกจ AI เพิ่ม
 
 ถ้า Git ไม่ได้ดาวน์โหลดไฟล์ LFS ให้อัตโนมัติ ให้ติดตั้ง Git LFS แล้วสั่ง
 `git lfs pull` หนึ่งครั้งหลัง clone เพื่อดึงโมเดลและ worker ตัวจริงลงมา
 เนื่องจากไฟล์ worker มีขนาดใหญ่และไม่สามารถเก็บเป็นไฟล์ Git ปกติได้
 
-โหมด Portable นี้ให้ Tag จาก YOLO และ Description จาก BLIP โดยไม่ต้องติดตั้ง
-Python หรือ Ollama หากมีไฟล์ `models/blip-image-captioning-base` และ
-`tools/bin/windows/caption_worker.exe` ครบ
+โหมด Portable นี้ให้ Tag จาก YOLO และ Description จาก BLIP โดย Windows ใช้
+`tools/bin/windows/*.exe` ส่วน macOS/Linux ใช้ Python worker และ `.venv-ai`
+จาก `scripts/setup-ai.sh`
 
 Caption จะถูกส่งต่อให้โมเดล `models/opus-mt-en-mul` แปลเป็นภาษาไทยแบบ Local
 ถ้าโมเดลแปลมีอยู่ครบ หากไม่มีโมเดลแปล Worker จะยังทำงานต่อและคืน Caption ภาษาอังกฤษ

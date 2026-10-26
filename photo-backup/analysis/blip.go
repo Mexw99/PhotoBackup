@@ -25,7 +25,11 @@ type BLIPAnalyzer struct {
 
 func NewBLIPAnalyzerFromEnv() *BLIPAnalyzer {
 	loadPortableConfig()
-	return &BLIPAnalyzer{python: firstNonEmpty(os.Getenv("BLIP_PYTHON"), findBLIPPython()), script: findCaptionFile("BLIP_SCRIPT", filepath.Join("tools", "caption_worker.py")), model: findCaptionModel(), worker: findCaptionFile("BLIP_WORKER", captionWorkerFileName())}
+	worker := findCaptionFile("BLIP_WORKER", captionWorkerFileName())
+	if runtime.GOOS != "windows" && strings.HasSuffix(strings.ToLower(worker), ".exe") {
+		worker = ""
+	}
+	return &BLIPAnalyzer{python: firstNonEmpty(os.Getenv("BLIP_PYTHON"), findBLIPPython()), script: findCaptionFile("BLIP_SCRIPT", filepath.Join("tools", "caption_worker.py")), model: findCaptionModel(), worker: worker}
 }
 
 func (a *BLIPAnalyzer) Analyze(path string) (AIResult, error) {
@@ -129,15 +133,11 @@ func findBLIPPython() string {
 		return value
 	}
 	for _, root := range yoloRoots() {
-		path := filepath.Join(root, ".venv-blip", "Scripts", "python.exe")
-		if runtime.GOOS != "windows" {
-			path = filepath.Join(root, ".venv-blip", "bin", "python")
-		}
-		if fileExists(path) {
-			return path
+		if python := findYOLOPythonIn(root); python != "" {
+			return python
 		}
 	}
-	return "python"
+	return findLocalPython()
 }
 func findCaptionModel() string {
 	if value := strings.TrimSpace(os.Getenv("BLIP_MODEL_PATH")); value != "" {

@@ -7,7 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
+
+var copyBufferPool = sync.Pool{
+	New: func() any {
+		buffer := make([]byte, 4*1024*1024)
+		return &buffer
+	},
+}
 
 type BackupResult struct {
 	OriginalName string `json:"originalName"`
@@ -16,6 +24,7 @@ type BackupResult struct {
 	FileSize     int64  `json:"fileSize"`
 	Success      bool   `json:"success"`
 	Skipped      bool   `json:"skipped"`
+	Message      string `json:"message"`
 	Error        string `json:"error"`
 }
 
@@ -31,6 +40,17 @@ type ProgressCallback func(current int, total int, name string)
 
 // CopyImage เตรียมไฟล์ปลายทางก่อน Service บันทึก DB และลบต้นทาง
 func CopyImage(image ImageFile, destDir string) (BackupResult, error) {
+	return copyImage(image, destDir, 0)
+}
+
+func CopyImageFromNumber(image ImageFile, destDir string, startNumber int) (BackupResult, error) {
+	if startNumber < 0 {
+		startNumber = 0
+	}
+	return copyImage(image, destDir, startNumber)
+}
+
+func copyImage(image ImageFile, destDir string, startNumber int) (BackupResult, error) {
 	result := BackupResult{OriginalName: image.Name, OriginalPath: image.Path, FileSize: image.Size}
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return result, err
@@ -41,12 +61,12 @@ func CopyImage(image ImageFile, destDir string) (BackupResult, error) {
 	}
 	defer source.Close()
 
-	// O_EXCL ป้องกันการเขียนทับไฟล์เดิม แม้มีไฟล์ชื่อเดียวกัน
-	for number := 0; ; number++ {
+	for number := startNumber; ; number++ {
 		name := image.Name
 		if number > 0 {
-			extension := filepath.Ext(name)
-			name = fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(name, extension), number, extension)
+			extension := filepath.Ext(image.Name)
+			base := strings.TrimSuffix(image.Name, extension)
+			name = fmt.Sprintf("%s (%d)%s", base, number, extension)
 		}
 		destination := filepath.Join(destDir, name)
 		file, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
@@ -57,7 +77,9 @@ func CopyImage(image ImageFile, destDir string) (BackupResult, error) {
 			return result, err
 		}
 
-		written, copyErr := io.Copy(file, source)
+		buffer := copyBufferPool.Get().(*[]byte)
+		written, copyErr := io.CopyBuffer(file, source, *buffer)
+		copyBufferPool.Put(buffer)
 		if copyErr == nil {
 			copyErr = file.Sync()
 		}

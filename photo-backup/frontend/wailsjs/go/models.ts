@@ -7,6 +7,7 @@ export namespace backup {
 	    fileSize: number;
 	    success: boolean;
 	    skipped: boolean;
+	    message: string;
 	    error: string;
 	
 	    static createFrom(source: any = {}) {
@@ -21,6 +22,7 @@ export namespace backup {
 	        this.fileSize = source["fileSize"];
 	        this.success = source["success"];
 	        this.skipped = source["skipped"];
+	        this.message = source["message"];
 	        this.error = source["error"];
 	    }
 	}

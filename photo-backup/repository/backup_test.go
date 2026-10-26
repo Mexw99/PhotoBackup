@@ -329,6 +329,20 @@ func TestSettingsUpdateOneRowAndFilenameSearch(t *testing.T) {
 	if err != nil || len(found) != 0 {
 		t.Fatalf("unmatched filename search: %+v, %v", found, err)
 	}
+	descriptionOnly := model.Photo{
+		OriginalName: "holiday.jpg",
+		OriginalPath: filepath.Join("source", "holiday.jpg"),
+		BackupPath:   filepath.Join(t.TempDir(), "holiday.jpg"),
+		Description:  "สวนดอกไม้",
+		BackedUpAt:   time.Now(),
+	}
+	if err := repo.CreatePhoto(&descriptionOnly); err != nil {
+		t.Fatal(err)
+	}
+	found, err = repo.SearchPhotos("สวนดอกไม้", nil)
+	if err != nil || len(found) != 0 {
+		t.Fatalf("description must not be searchable: %+v, %v", found, err)
+	}
 }
 
 func TestRemovingColorTagsClearsSavedColor(t *testing.T) {

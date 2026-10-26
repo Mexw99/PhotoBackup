@@ -215,3 +215,35 @@ func TestMoveRetryDoesNotReuseSymlinkToSource(t *testing.T) {
 		t.Fatalf("source remains: %v", err)
 	}
 }
+
+func TestMoveDuplicateNameKeepsSourceAndReportsSkip(t *testing.T) {
+	s, db := newMoveService(t)
+	source, destination := t.TempDir(), t.TempDir()
+	path := filepath.Join(source, "red.png")
+	contents := writeMovePhoto(t, path)
+	existing := []byte("existing destination")
+	if err := os.WriteFile(filepath.Join(destination, "red.png"), existing, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := s.StartBackup(source, destination, nil)
+	if err != nil || summary.Success != 1 || summary.Skipped != 0 || summary.Failed != 0 {
+		t.Fatalf("duplicate result: %+v, %v", summary, err)
+	}
+	if filepath.Base(summary.Results[0].BackupPath) != "red (1).png" {
+		t.Fatalf("duplicate result did not create renamed copy: %+v", summary.Results[0])
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("source should be removed after renamed copy: %v", err)
+	}
+	if actual, err := os.ReadFile(filepath.Join(destination, "red.png")); err != nil || !bytes.Equal(actual, existing) {
+		t.Fatalf("destination was overwritten: %v", err)
+	}
+	if actual, err := os.ReadFile(summary.Results[0].BackupPath); err != nil || !bytes.Equal(actual, contents) {
+		t.Fatalf("renamed copy differs: %v", err)
+	}
+	var count int64
+	if err := db.GORM().Model(&model.Photo{}).Count(&count).Error; err != nil || count != 1 {
+		t.Fatalf("renamed copy should create a photo row: count=%d error=%v", count, err)
+	}
+}

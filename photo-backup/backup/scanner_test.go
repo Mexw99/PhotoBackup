@@ -80,8 +80,8 @@ func TestCopyImageDoesNotOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(result.BackupPath) != "same (1).jpg" {
-		t.Fatal(result.BackupPath)
+	if !result.Success || result.Skipped || filepath.Base(result.BackupPath) != "same (1).jpg" {
+		t.Fatalf("expected a renamed duplicate, got %+v", result)
 	}
 	data, err := os.ReadFile(filepath.Join(destination, "same.jpg"))
 	if err != nil || string(data) != "old" {

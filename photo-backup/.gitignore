@@ -8,6 +8,7 @@ photo-backup.db
 config.json
 .venv-yolo/
 .venv-blip/
+.venv-ai/
 runs/
 *.pt
 *.onnx

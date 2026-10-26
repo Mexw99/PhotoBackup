@@ -10,6 +10,7 @@ export type BackupResult = Pick<
   | "fileSize"
   | "success"
   | "skipped"
+  | "message"
   | "error"
 >;
 export type BackupSummary = Pick<

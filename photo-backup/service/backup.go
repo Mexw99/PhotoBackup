@@ -61,6 +61,10 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 	if err := s.SaveBackupSettings(sourcePath, destPath); err != nil {
 		return backup.BackupSummary{}, err
 	}
+	duplicatePaths, err := s.backupPathsInDestination(destPath)
+	if err != nil {
+		return backup.BackupSummary{}, err
+	}
 
 	summary := backup.BackupSummary{
 		Total:   len(images),
@@ -88,7 +92,7 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 			defer workers.Done()
 			for index := range jobs {
 				image := images[index]
-				result, err := s.backupPhoto(image, sourcePath, destPath)
+				result, err := s.backupPhoto(image, sourcePath, destPath, duplicatePaths)
 				outcomes <- backupOutcome{index: index, image: image, result: result, err: err}
 			}
 		}()
@@ -124,7 +128,7 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 	return summary, nil
 }
 
-func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath string) (backup.BackupResult, error) {
+func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath string, duplicatePaths map[string]struct{}) (backup.BackupResult, error) {
 	result := backup.BackupResult{OriginalName: image.Name, OriginalPath: image.Path, FileSize: image.Size}
 	info, err := os.Stat(image.Path)
 	if err != nil {
@@ -159,6 +163,7 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 			}
 			s.enqueueAIJob(previous.ID, previous.ContentHash)
 			result.BackupPath = previous.BackupPath
+			result.Message = "ใช้ไฟล์ปลายทางเดิม ตรวจสอบแล้วตรงกัน และลบต้นฉบับสำเร็จ"
 			if err := s.finishMove(image.Path, result.BackupPath, info); err != nil {
 				return result, err
 			}
@@ -174,7 +179,19 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 	if err != nil {
 		return result, err
 	}
-	result, err = backup.CopyImage(image, filepath.Join(destPath, filepath.Dir(relative)))
+	copyDir := filepath.Join(destPath, filepath.Dir(relative))
+	startNumber := 0
+	if previous == nil {
+		expectedPath := filepath.Join(copyDir, image.Name)
+		if _, exists := duplicatePaths[filepath.Clean(expectedPath)]; exists {
+			startNumber = 1
+		}
+	}
+	if startNumber == 0 {
+		result, err = backup.CopyImage(image, copyDir)
+	} else {
+		result, err = backup.CopyImageFromNumber(image, copyDir, startNumber)
+	}
 	if err != nil {
 		return result, err
 	}
@@ -212,6 +229,20 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 		return result, err
 	}
 	return result, nil
+}
+
+func (s *Service) backupPathsInDestination(destPath string) (map[string]struct{}, error) {
+	store, cancel := s.operation()
+	paths, err := store.BackupPathsInDestination(destPath)
+	cancel()
+	if err != nil {
+		return nil, err
+	}
+	duplicates := make(map[string]struct{}, len(paths))
+	for _, path := range paths {
+		duplicates[filepath.Clean(path)] = struct{}{}
+	}
+	return duplicates, nil
 }
 
 // ลบต้นทางหลังปลายทางและ DB พร้อมแล้วเท่านั้น
