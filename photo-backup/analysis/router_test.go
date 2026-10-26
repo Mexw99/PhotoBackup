@@ -65,6 +65,15 @@ func TestParseAIResultAcceptsMarkdownWrappedJSON(t *testing.T) {
 	}
 }
 
+func TestGeminiAPIKeysCombinesBothEnvironmentVariables(t *testing.T) {
+	t.Setenv("GEMINI_API_KEYS", "first,second")
+	t.Setenv("GEMINI_API_KEY", "second,third")
+	keys := geminiAPIKeys()
+	if len(keys) != 3 || keys[0] != "first" || keys[1] != "second" || keys[2] != "third" {
+		t.Fatalf("keys = %v, want three unique keys in order", keys)
+	}
+}
+
 type fixedAnalyzer struct {
 	result AIResult
 	err    error
@@ -98,4 +107,55 @@ func TestCombinedAnalyzerMergesLocalTagsAndDescription(t *testing.T) {
 	if result.Description != "แมวอยู่บนเก้าอี้" || len(result.Tags) != 3 {
 		t.Fatalf("unexpected combined result: %+v", result)
 	}
+}
+
+func TestCombinedAnalyzerUsesGeminiFallbackWhenYOLOHasNoTags(t *testing.T) {
+	t.Setenv("AI_FALLBACK_RETRIES", "2")
+	fallback := &sequenceAnalyzer{results: []AIResult{
+		{},
+		{Description: "แมวอยู่ในบ้าน", Tags: []string{"แมว", "บ้าน"}},
+	}}
+	analyzer := &CombinedAnalyzer{
+		yolo:     fixedAnalyzer{result: AIResult{}},
+		vision:   fixedAnalyzer{result: AIResult{Description: "คำอธิบายจาก BLIP"}},
+		fallback: fallback,
+	}
+	result, err := analyzer.Analyze("test.jpg")
+	if err != nil {
+		t.Fatalf("fallback returned error: %v", err)
+	}
+	if fallback.calls != 2 || result.Description != "คำอธิบายจาก BLIP" || len(result.Tags) != 2 {
+		t.Fatalf("unexpected fallback result: calls=%d result=%+v", fallback.calls, result)
+	}
+}
+
+func TestCombinedAnalyzerSkipsGeminiWhenYOLOHasTags(t *testing.T) {
+	fallback := &sequenceAnalyzer{results: []AIResult{{Tags: []string{"cloud"}}}}
+	analyzer := &CombinedAnalyzer{
+		yolo:     fixedAnalyzer{result: AIResult{Tags: []string{"cat"}}},
+		vision:   fixedAnalyzer{},
+		fallback: fallback,
+	}
+	result, err := analyzer.Analyze("test.jpg")
+	if err != nil {
+		t.Fatalf("YOLO result returned error: %v", err)
+	}
+	if fallback.calls != 0 || len(result.Tags) != 1 || result.Tags[0] != "cat" {
+		t.Fatalf("Gemini should be skipped when YOLO has tags: calls=%d result=%+v", fallback.calls, result)
+	}
+}
+
+type sequenceAnalyzer struct {
+	results []AIResult
+	calls   int
+}
+
+func (a *sequenceAnalyzer) Analyze(string) (AIResult, error) {
+	a.calls++
+	if len(a.results) == 0 {
+		return AIResult{}, nil
+	}
+	result := a.results[0]
+	a.results = a.results[1:]
+	return result, nil
 }

@@ -1,7 +1,8 @@
 {
   "aiProvider": "blip",
+  "aiFallbackProvider": "gemini",
   "geminiApiKeys": "",
-  "geminiModel": "gemini-2.5-flash",
+  "geminiModel": "gemini-3.6-flash",
   "openaiApiKeys": "",
   "openaiModel": "gpt-4.1-mini",
   "captionProvider": "blip",

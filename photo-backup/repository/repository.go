@@ -23,6 +23,7 @@ type Store interface {
 	FindPhoto(uint) (*model.Photo, error)
 	UpdatePhotoContentHash(uint, *string) error
 	FindAIResult(string, string, string) (*model.AIResult, error)
+	HasAITags(uint) (bool, error)
 	SaveAIResultAndApply(*model.AIResult, []string) error
 	CreateAIJobIfMissing(*model.AIJob) (*model.AIJob, error)
 	ResetProcessingAIJobs() error

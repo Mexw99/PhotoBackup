@@ -3,7 +3,7 @@
 แอปจัดการรูปภาพบนเดสก์ท็อปด้วย Wails v2, Go, Nuxt 4 และ SQLite/GORM
 รองรับบันทึกโฟลเดอร์ต้นทาง/ปลายทาง ย้ายรูปไปเก็บที่ปลายทาง และวิเคราะห์ภาพด้วย AI เป็น Description/Tag
 ระบบเก็บ SHA-256 ของไฟล์ Backup เพื่อใช้ Cache ผลวิเคราะห์ซ้ำ และมี Persistent AI Job Queue
-ค้นหาชื่อไฟล์ คำอธิบาย และ Tag Cloud ได้หลาย Tag โดยผลการวิเคราะห์จะแสดงในรายละเอียดรูป
+ค้นหาชื่อไฟล์และ Tag Cloud ได้หลาย Tag โดยคำอธิบายจาก AI จะแสดงในรายละเอียดรูป
 
 อ่าน [คู่มือเตรียมตรวจความก้าวหน้าและไล่อ่านโค้ด](docs/PROGRESS_DEMO.md)
 สำหรับหัวข้อที่ทำเพิ่ม วิธีสาธิต และไฟล์สำคัญตามเกณฑ์ตรวจรอบนี้
@@ -62,16 +62,23 @@ AI ไม่ทำให้ Backup ต้องรอ: งานจะถูก�
 ค่าเริ่มต้นเลือก Portable BLIP/YOLO แบบ Local เพื่อให้เปิดโปรแกรมแล้วพร้อมวิเคราะห์โดยไม่เกิดค่าใช้จ่าย Cloud
 ส่วน Gemini/OpenAI ยังคงปิดไว้และต้องเปิดใช้งานเองผ่าน environment เท่านั้น
 
-```powershell
-$env:AI_PROVIDER = "blip"        # หรือ gemini / openai / all
-$env:AI_ALLOW_CLOUD = "true"      # ใช้กับ Gemini/OpenAI เมื่อยอมรับค่าใช้จ่ายแล้ว
-$env:AI_ALLOW_LOCAL = "true"      # Local AI ไม่ใช้ Cloud API และไม่มี API Key
-$env:GEMINI_API_KEYS = "KEY_1,KEY_2"
-$env:GEMINI_MODEL = "gemini-2.5-flash"
-$env:AI_MAX_CONCURRENCY = "1"
-$env:AI_MAX_RETRIES = "3"
-$env:AI_DAILY_LIMIT = "0"          # 0 = ไม่จำกัด; Cache Hit ไม่ถูกนับ
+สร้างไฟล์ `.env` จาก `.env.example` แล้วตั้งค่า โดยระบบจะโหลดไฟล์นี้ให้อัตโนมัติเมื่อเปิดโปรแกรม:
+
+```env
+AI_PROVIDER=blip
+AI_FALLBACK_PROVIDER=gemini
+AI_ALLOW_CLOUD=true
+AI_ALLOW_LOCAL=true
+GEMINI_API_KEYS=KEY_1,KEY_2
+GEMINI_MODEL=gemini-3.6-flash
+AI_FALLBACK_RETRIES=2
+AI_MAX_CONCURRENCY=1
+AI_MAX_RETRIES=3
+AI_DAILY_LIMIT=0
 ```
+
+`GEMINI_API_KEYS` รองรับหลายคีย์โดยคั่นด้วย comma หรือขึ้นบรรทัดใหม่ ระบบจะหมุนคีย์ทีละคำขอ
+ถ้าไม่ต้องการใช้ Cloud ให้ตั้ง `AI_ALLOW_CLOUD=false`
 
 เมื่อใช้ `AI_PROVIDER=all` ระบบจะใช้เฉพาะ Provider ที่มีการตั้งค่าและได้รับอนุญาต
 เช่น `AI_ALLOW_CLOUD=true` พร้อม Gemini/OpenAI key และ/หรือ
@@ -82,6 +89,11 @@ $env:AI_DAILY_LIMIT = "0"          # 0 = ไม่จำกัด; Cache Hit ไ
 
 ระบบ Local จะใช้ YOLO สร้าง Tag วัตถุ และใช้ BLIP สร้าง Description พร้อมกัน
 โดย Worker จะเปิด process ค้างไว้ ไม่เปิดโมเดลใหม่ทุกภาพ
+
+ถ้าตั้ง `AI_FALLBACK_PROVIDER=gemini` และ YOLO คืน Tag ว่างหรือวิเคราะห์ไม่สำเร็จ
+ระบบจะส่งรูปให้ Gemini สูงสุดตามค่า `AI_FALLBACK_RETRIES` แล้วใช้ Tag จาก Gemini
+ถ้าทั้ง YOLO และ Gemini ไม่ได้ Tag งานวิเคราะห์จะไม่ถูกบันทึกเป็นสำเร็จ แต่จะถูก Retry
+หรือแสดงเป็นงานล้มเหลวตามจริง เพื่อไม่ให้รูปถูกมองว่าวิเคราะห์เสร็จทั้งที่ไม่มี Tag
 
 #### macOS / Linux จาก Source
 
@@ -155,7 +167,7 @@ Caption จะถูกส่งต่อให้โมเดล `models/opus-m
 Worker มีขนาดใหญ่เนื่องจากรวม PyTorch/Ultralytics ไว้ภายใน จึงควรใช้ Git LFS
 หรือส่งเป็น ZIP หาก Repository ไม่รองรับไฟล์ขนาดใหญ่
 
-ห้าม commit `config.json` หรือ API Key จริง แนะนำให้ revoke Key ที่เคยอยู่ในไฟล์/แชตและออก Key ใหม่
+ห้าม commit `.env`, `config.json` หรือ API Key จริง แนะนำให้ revoke Key ที่เคยอยู่ในไฟล์/แชตและออก Key ใหม่
 ดูค่าตัวอย่างที่ `config.example.json` และ `.env.example` โดยไม่มี Key จริง
 
 ## AI Pipeline แบบย่อ

@@ -224,7 +224,7 @@ func findYOLOFile(envName, defaultName string) string {
 	for _, root := range yoloRoots() {
 		candidates := []string{filepath.Join(root, defaultName)}
 		if defaultName == "yolo11n.pt" {
-			candidates = append(candidates, filepath.Join(root, "models", defaultName))
+			candidates = append(candidates, filepath.Join(root, "models", defaultName), filepath.Join(root, "tools", defaultName))
 		}
 		if defaultName == workerFileName() {
 			candidates = append(candidates, filepath.Join(root, "tools", "bin", runtime.GOOS, defaultName))

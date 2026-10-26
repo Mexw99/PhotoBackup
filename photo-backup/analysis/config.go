@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
 type portableAIConfig struct {
 	Provider            string `json:"aiProvider"`
+	FallbackProvider    string `json:"aiFallbackProvider"`
 	GeminiKeys          string `json:"geminiApiKeys"`
 	GeminiModel         string `json:"geminiModel"`
 	OpenAIKeys          string `json:"openaiApiKeys"`
@@ -29,6 +31,7 @@ type portableAIConfig struct {
 // loadPortableConfig loads config.json from the working directory or beside
 // the executable. Environment variables still take precedence when present.
 func loadPortableConfig() {
+	loadDotEnv()
 	paths := make([]string, 0, 2)
 	if workingDir, err := os.Getwd(); err == nil {
 		paths = append(paths, filepath.Join(workingDir, "config.json"))
@@ -46,6 +49,7 @@ func loadPortableConfig() {
 			continue
 		}
 		setIfMissing("AI_PROVIDER", config.Provider)
+		setIfMissing("AI_FALLBACK_PROVIDER", config.FallbackProvider)
 		setIfMissing("GEMINI_API_KEYS", config.GeminiKeys)
 		setIfMissing("GEMINI_MODEL", config.GeminiModel)
 		setIfMissing("OPENAI_API_KEYS", config.OpenAIKeys)
@@ -65,6 +69,52 @@ func loadPortableConfig() {
 	}
 }
 
+func loadDotEnv() {
+	paths := make([]string, 0, 2)
+	if workingDir, err := os.Getwd(); err == nil {
+		paths = append(paths, filepath.Join(workingDir, ".env"))
+	}
+	if executable, err := os.Executable(); err == nil {
+		paths = append(paths, filepath.Join(filepath.Dir(executable), ".env"))
+	}
+	seen := make(map[string]bool)
+	for _, path := range paths {
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" || strings.HasPrefix(line, "#") {
+				continue
+			}
+			line = strings.TrimPrefix(line, "export ")
+			name, value, ok := strings.Cut(line, "=")
+			if !ok {
+				continue
+			}
+			name = strings.TrimSpace(name)
+			value = strings.TrimSpace(value)
+			if name == "" {
+				continue
+			}
+			if len(value) >= 2 && ((value[0] == '"' && value[len(value)-1] == '"') || (value[0] == '\'' && value[len(value)-1] == '\'')) {
+				value = value[1 : len(value)-1]
+			}
+			if _, exists := os.LookupEnv(name); !exists {
+				_ = os.Setenv(name, value)
+			}
+		}
+	}
+	if strings.TrimSpace(os.Getenv("GEMINI_MODEL")) == "" {
+		setIfMissing("GEMINI_MODEL", os.Getenv("PHOTO_BACKUP_AI_MODEL"))
+	}
+}
+
 func setIfMissing(name, value string) {
 	if strings.TrimSpace(os.Getenv(name)) == "" && strings.TrimSpace(value) != "" {
 		_ = os.Setenv(name, value)
@@ -80,4 +130,12 @@ func setPathIfMissing(name, value, baseDir string) {
 		value = filepath.Join(baseDir, value)
 	}
 	_ = os.Setenv(name, value)
+}
+
+func envInt(name string, fallback int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(name)))
+	if err != nil {
+		return fallback
+	}
+	return value
 }

@@ -28,8 +28,9 @@ type ImageAnalyzer interface {
 // parallel, then merges their tags. A failure in one local engine does not
 // discard a successful result from the other.
 type CombinedAnalyzer struct {
-	yolo   ImageAnalyzer
-	vision ImageAnalyzer
+	yolo     ImageAnalyzer
+	vision   ImageAnalyzer
+	fallback ImageAnalyzer
 }
 
 // LocalStatus describes the two local engines without performing inference.
@@ -43,10 +44,17 @@ func (a *CombinedAnalyzer) LocalStatus(_ context.Context) (string, string) {
 		blipState, blipMessage = "ready", "BLIP พร้อมใช้งาน"
 	}
 	if yoloReady && blipState == "ready" {
+		if a.fallback != nil {
+			return "ready", "YOLO และ BLIP พร้อมใช้งาน; Gemini จะช่วยเมื่อ YOLO ไม่พบ Tag"
+		}
 		return "ready", "YOLO และตัวสร้างคำอธิบายภาพพร้อมใช้งาน"
 	}
 	if yoloReady {
-		return "partial", "YOLO พร้อมใช้งาน; BLIP ยังไม่พร้อม: " + blipMessage
+		message := "YOLO พร้อมใช้งาน; BLIP ยังไม่พร้อม: " + blipMessage
+		if a.fallback != nil {
+			message += "; Gemini จะช่วยเมื่อ YOLO ไม่พบ Tag"
+		}
+		return "partial", message
 	}
 	return "error", "YOLO ยังไม่พร้อม; " + blipMessage
 }
@@ -56,21 +64,47 @@ func (a *CombinedAnalyzer) Analyze(path string) (AIResult, error) {
 		result AIResult
 		err    error
 	}
-	results := make(chan outcome, 2)
-	go func() { result, err := a.yolo.Analyze(path); results <- outcome{result, err} }()
-	go func() { result, err := a.vision.Analyze(path); results <- outcome{result, err} }()
-	first, second := <-results, <-results
-	merged := AIResult{}
+	visionResult := make(chan outcome, 1)
+	go func() { result, err := a.vision.Analyze(path); visionResult <- outcome{result, err} }()
+
+	yoloResult, yoloErr := a.yolo.Analyze(path)
+	merged := AIResult{Tags: cleanTags(yoloResult.Tags)}
 	var lastErr error
-	for _, item := range []outcome{first, second} {
-		if item.err != nil {
-			lastErr = item.err
-			continue
+	if yoloErr != nil {
+		lastErr = yoloErr
+	}
+
+	var fallbackResult AIResult
+	var fallbackErr error
+	if len(merged.Tags) == 0 && a.fallback != nil {
+		attempts := envInt("AI_FALLBACK_RETRIES", 2)
+		if attempts < 1 {
+			attempts = 1
 		}
-		if merged.Description == "" {
-			merged.Description = item.result.Description
+		if attempts > 3 {
+			attempts = 3
 		}
-		merged.Tags = append(merged.Tags, item.result.Tags...)
+		for attempt := 0; attempt < attempts; attempt++ {
+			fallbackResult, fallbackErr = a.fallback.Analyze(path)
+			if fallbackErr == nil && len(cleanTags(fallbackResult.Tags)) > 0 {
+				merged.Tags = cleanTags(fallbackResult.Tags)
+				break
+			}
+			if fallbackErr != nil {
+				lastErr = fallbackErr
+			}
+		}
+	}
+
+	vision := <-visionResult
+	if vision.err != nil {
+		lastErr = vision.err
+	} else {
+		merged.Description = strings.TrimSpace(vision.result.Description)
+		merged.Tags = append(merged.Tags, vision.result.Tags...)
+	}
+	if merged.Description == "" {
+		merged.Description = strings.TrimSpace(fallbackResult.Description)
 	}
 	merged.Tags = cleanTags(merged.Tags)
 	if merged.Description == "" && len(merged.Tags) == 0 && lastErr != nil {
@@ -80,7 +114,7 @@ func (a *CombinedAnalyzer) Analyze(path string) (AIResult, error) {
 }
 
 func (a *CombinedAnalyzer) Close() error {
-	for _, analyzer := range []ImageAnalyzer{a.yolo, a.vision} {
+	for _, analyzer := range []ImageAnalyzer{a.yolo, a.vision, a.fallback} {
 		if closer, ok := analyzer.(interface{ Close() error }); ok {
 			if err := closer.Close(); err != nil {
 				return err
@@ -107,7 +141,7 @@ func NewAnalyzerFromEnv() ImageAnalyzer {
 	// Older config files may still contain a removed local provider name.
 	// Treat unknown local values as the bundled BLIP pipeline so upgrades do
 	// not silently disable AI.
-	if providerSetting != "all" && providerSetting != "blip" &&
+	if providerSetting != "all" && providerSetting != "blip" && providerSetting != "hybrid" &&
 		providerSetting != "gemini" && providerSetting != "openai" &&
 		providerSetting != "gpt" && !strings.Contains(providerSetting, ",") {
 		providerSetting = "blip"
@@ -134,21 +168,21 @@ func NewAnalyzerFromEnv() ImageAnalyzer {
 			}
 		}
 		if localAIEnabled() {
-			providers = append(providers, &CombinedAnalyzer{yolo: NewYOLOAnalyzerFromEnv(), vision: newLocalCaptionAnalyzer()})
+			providers = append(providers, newLocalCombinedAnalyzer(false))
 		}
 		if len(providers) == 0 {
 			return nil
 		}
 		return &MultiAnalyzer{providers: providers}
 	}
-	if providerSetting == "blip" {
+	if providerSetting == "blip" || providerSetting == "hybrid" {
 		if !localAIEnabled() {
 			return nil
 		}
 		if strings.EqualFold(strings.TrimSpace(os.Getenv("YOLO_ENABLED")), "false") {
 			return newLocalCaptionAnalyzer()
 		}
-		return &CombinedAnalyzer{yolo: NewYOLOAnalyzerFromEnv(), vision: newLocalCaptionAnalyzer()}
+		return newLocalCombinedAnalyzer(true)
 	}
 	if !envBool("AI_ALLOW_CLOUD") {
 		return nil
@@ -165,6 +199,14 @@ func NewAnalyzerFromEnv() ImageAnalyzer {
 
 func newLocalCaptionAnalyzer() ImageAnalyzer {
 	return NewBLIPAnalyzerFromEnv()
+}
+
+func newLocalCombinedAnalyzer(withFallback bool) ImageAnalyzer {
+	var fallback ImageAnalyzer
+	if withFallback && strings.EqualFold(strings.TrimSpace(os.Getenv("AI_FALLBACK_PROVIDER")), "gemini") && envBool("AI_ALLOW_CLOUD") {
+		fallback = NewGeminiAnalyzerFromEnv()
+	}
+	return &CombinedAnalyzer{yolo: NewYOLOAnalyzerFromEnv(), vision: newLocalCaptionAnalyzer(), fallback: fallback}
 }
 
 func envBool(name string) bool {
@@ -208,11 +250,14 @@ func ConfiguredProviderModel() (string, string) {
 		if model == "" {
 			model = "gpt-4.1-mini"
 		}
-	case "blip":
+	case "blip", "hybrid":
 		model = "blip-image-captioning-base"
 		if !strings.EqualFold(strings.TrimSpace(os.Getenv("YOLO_ENABLED")), "false") {
 			model = "yolo11n+" + model
 			provider = "local-portable"
+		}
+		if strings.EqualFold(strings.TrimSpace(os.Getenv("AI_FALLBACK_PROVIDER")), "gemini") && envBool("AI_ALLOW_CLOUD") && len(geminiAPIKeys()) > 0 {
+			model += "+gemini-fallback"
 		}
 	case "multi":
 		model = "multi-provider"

@@ -31,11 +31,7 @@ type GeminiAnalyzer struct {
 }
 
 func NewGeminiAnalyzerFromEnv() *GeminiAnalyzer {
-	keys := splitAPIKeys(os.Getenv("GEMINI_API_KEYS"))
-	if len(keys) == 0 {
-		// รองรับการตั้งค่าแบบ Key เดียวด้วย
-		keys = splitAPIKeys(os.Getenv("GEMINI_API_KEY"))
-	}
+	keys := geminiAPIKeys()
 	if len(keys) == 0 {
 		return nil
 	}
@@ -48,6 +44,18 @@ func NewGeminiAnalyzerFromEnv() *GeminiAnalyzer {
 		model:  model,
 		client: &http.Client{Timeout: 45 * time.Second},
 	}
+}
+
+func geminiAPIKeys() []string {
+	keys := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, key := range append(splitAPIKeys(os.Getenv("GEMINI_API_KEYS")), splitAPIKeys(os.Getenv("GEMINI_API_KEY"))...) {
+		if !seen[key] {
+			seen[key] = true
+			keys = append(keys, key)
+		}
+	}
+	return keys
 }
 
 func (a *GeminiAnalyzer) Analyze(path string) (AIResult, error) {

@@ -27,6 +27,10 @@ func TestAIResultCacheUpsertAndAppliesToSameContent(t *testing.T) {
 	if err := repo.SaveAIResultAndApply(first, []string{"ทะเล", "วันหยุด"}); err != nil {
 		t.Fatal(err)
 	}
+	hasTags, err := repo.HasAITags(photo1.ID)
+	if err != nil || !hasTags {
+		t.Fatalf("AI tags were not recorded: hasTags=%v err=%v", hasTags, err)
+	}
 	second := &model.AIResult{ContentHash: hash, AnalysisProfile: "vision-tags", Provider: "test", Model: "fake-v2", PromptVersion: "v1", Description: "ทะเลและภูเขา", TagsJSON: `[]`}
 	if err := repo.SaveAIResultAndApply(second, []string{"ทะเล", "ภูเขา"}); err != nil {
 		t.Fatal(err)

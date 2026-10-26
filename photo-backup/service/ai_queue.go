@@ -49,6 +49,12 @@ func (s *Service) enqueueAIJob(photoID uint, contentHash *string) {
 	if s.analyzer == nil || contentHash == nil || strings.TrimSpace(*contentHash) == "" {
 		return
 	}
+	store, cancel := s.operation()
+	hasAITags, err := store.HasAITags(photoID)
+	cancel()
+	if err != nil || hasAITags {
+		return
+	}
 	provider, modelName := analysis.ConfiguredProviderModel()
 	job := &model.AIJob{
 		PhotoID: photoID, ContentHash: *contentHash,
@@ -56,7 +62,7 @@ func (s *Service) enqueueAIJob(photoID uint, contentHash *string) {
 		PromptVersion:   analysis.DefaultPromptVersion,
 		Provider:        provider, Model: modelName, Status: aiJobQueued,
 	}
-	store, cancel := s.operation()
+	store, cancel = s.operation()
 	backupDatabaseLock.Lock()
 	_, _ = store.CreateAIJobIfMissing(job)
 	backupDatabaseLock.Unlock()
@@ -103,7 +109,13 @@ func (s *Service) reconcileAIJobs() {
 		return
 	}
 	for _, photo := range photos {
-		if photo.ContentHash == nil || strings.TrimSpace(*photo.ContentHash) == "" || strings.TrimSpace(photo.Description) != "" {
+		if photo.ContentHash == nil || strings.TrimSpace(*photo.ContentHash) == "" {
+			continue
+		}
+		tagStore, tagCancel := s.operation()
+		hasAITags, tagErr := tagStore.HasAITags(photo.ID)
+		tagCancel()
+		if tagErr != nil || hasAITags {
 			continue
 		}
 		s.enqueueAIJob(photo.ID, photo.ContentHash)
@@ -218,15 +230,21 @@ func (s *Service) processAIJob(ctx context.Context, job *model.AIJob) {
 			finish(aiJobFailed, "AI Cache มี TagsJSON ไม่ถูกต้อง")
 			return
 		}
-		// ใช้ composite cache key เป็นตัวชน ไม่ใช้ ID เดิมที่อ่านจาก DB
-		cachedCopy := *cached
-		cachedCopy.ID = 0
-		if err := s.saveCachedResult(&cachedCopy, tags); err != nil {
-			finish(aiJobFailed, fmt.Sprintf("ใช้ AI Cache ไม่ได้: %v", err))
+		if len(tags) == 0 {
+			// Empty AI cache is not a successful result. Continue to the provider
+			// so a previous transient failure cannot permanently hide the photo.
+			cached = nil
+		} else {
+			// ใช้ composite cache key เป็นตัวชน ไม่ใช้ ID เดิมที่อ่านจาก DB
+			cachedCopy := *cached
+			cachedCopy.ID = 0
+			if err := s.saveCachedResult(&cachedCopy, tags); err != nil {
+				finish(aiJobFailed, fmt.Sprintf("ใช้ AI Cache ไม่ได้: %v", err))
+				return
+			}
+			finish(aiJobCompleted, "")
 			return
 		}
-		finish(aiJobCompleted, "")
-		return
 	}
 
 	provider, modelName := analysis.ConfiguredProviderModel()
@@ -263,6 +281,14 @@ func (s *Service) processAIJob(ctx context.Context, job *model.AIJob) {
 			return
 		}
 		finish(aiJobFailed, err.Error())
+		return
+	}
+	if len(result.Tags) == 0 {
+		noTagsErr := &analysis.ProviderError{Provider: "AI", StatusCode: 503, Message: "AI ไม่คืน Tag สำหรับรูปนี้"}
+		if retry(noTagsErr.Error(), noTagsErr) {
+			return
+		}
+		finish(aiJobFailed, noTagsErr.Error())
 		return
 	}
 	tagsJSON, err := json.Marshal(result.Tags)

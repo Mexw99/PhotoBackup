@@ -38,6 +38,14 @@ func (r *Repository) FindAIResult(contentHash, profile, promptVersion string) (*
 	return &result, nil
 }
 
+func (r *Repository) HasAITags(photoID uint) (bool, error) {
+	var count int64
+	err := r.db.Model(&model.PhotoTag{}).
+		Where("photo_id = ? AND source = ?", photoID, "ai").
+		Count(&count).Error
+	return count > 0, err
+}
+
 // SaveAIResultAndApply ใช้ transaction เดียวทั้ง Cache และ Photo/Tag
 // Provider กับ Model เป็นข้อมูลอ้างอิง จึงไม่อยู่ใน unique cache key
 func (r *Repository) SaveAIResultAndApply(result *model.AIResult, tagNames []string) error {
@@ -93,10 +101,9 @@ func (r *Repository) CreateAIJobIfMissing(job *model.AIJob) (*model.AIJob, error
 	var existing model.AIJob
 	err := r.db.Where("photo_id = ? AND analysis_profile = ? AND prompt_version = ?", job.PhotoID, job.AnalysisProfile, job.PromptVersion).First(&existing).Error
 	if err == nil {
-		// A failed job is safe to requeue when reconciliation sees the same
-		// photo again. Refresh the hash and provider metadata so an old failure
-		// cannot permanently block a repaired local worker.
-		if existing.Status == "failed" {
+		// Refresh stale or incomplete jobs so a previous failure cannot block a
+		// repaired worker or leave a photo without AI tags.
+		if existing.Status == "failed" || existing.Status == "completed" || existing.ContentHash != job.ContentHash {
 			updates := map[string]interface{}{
 				"content_hash": job.ContentHash, "provider": job.Provider, "model": job.Model,
 				"status": "queued", "attempt_count": 0, "last_error": "",
