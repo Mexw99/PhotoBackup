@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"photo-backup/database"
 	"photo-backup/service"
 )
@@ -23,6 +24,9 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	if a.service != nil {
 		a.service.SetContext(ctx)
+		a.service.SetAnalysisNotifier(func(progress service.AnalysisProgress) {
+			runtime.EventsEmit(ctx, "photo:analysis", progress)
+		})
 	}
 }
 

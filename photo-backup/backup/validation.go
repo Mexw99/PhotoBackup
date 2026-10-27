@@ -71,3 +71,28 @@ func insideFolder(parent, child string) bool {
 	relative, err := filepath.Rel(parent, child)
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))
 }
+
+func ValidateDestinationPath(root, directory string) error {
+	if !insideFolder(root, directory) {
+		return fmt.Errorf("ปลายทางอยู่นอกโฟลเดอร์ที่เลือก")
+	}
+	relative, err := filepath.Rel(root, directory)
+	if err != nil {
+		return err
+	}
+	current := root
+	for _, part := range strings.Split(relative, string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+			return fmt.Errorf("โฟลเดอร์ปลายทางย่อยเป็นลิงก์หรือไม่ใช่โฟลเดอร์: %s", current)
+		}
+	}
+	return nil
+}

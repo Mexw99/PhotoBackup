@@ -76,13 +76,15 @@ func TestBackupMovesFilesAndSupportsChangedDestination(t *testing.T) {
 		t.Fatalf("empty source: %+v, %v", empty, err)
 	}
 
-	// จำลองต้นทางเดิมที่ยังค้างอยู่ ต้องใช้สำเนาเดิมและลบต้นทางให้จบ
+	// ชื่อซ้ำต้องคงต้นฉบับไว้ แม้เนื้อไฟล์จะเหมือนสำเนาเดิม
 	restoreSource(t, path, contents, info.ModTime())
 	second, err := s.StartBackup(source, destination, nil)
 	if err != nil || second.Skipped != 1 || second.Success != 0 {
 		t.Fatalf("repeat: %+v, %v", second, err)
 	}
-	sourceMustBeGone(t, path)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
 	photos, err := s.ListPhotos()
 	if err != nil || len(photos) != 1 {
 		t.Fatalf("duplicate records: %+v, %v", photos, err)
@@ -102,10 +104,12 @@ func TestBackupMovesFilesAndSupportsChangedDestination(t *testing.T) {
 	if err != nil || backToFirst.Skipped != 1 || backToFirst.Success != 0 {
 		t.Fatalf("return to first destination: %+v, %v", backToFirst, err)
 	}
-	sourceMustBeGone(t, path)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
 }
 
-func TestBackupReplacesMissingCopyAndDetectsChangedTime(t *testing.T) {
+func TestBackupKeepsSourceForRecordedNameEvenWhenCopyMissingOrTimeChanged(t *testing.T) {
 	s := newService(t)
 	source, destination := t.TempDir(), t.TempDir()
 	path := filepath.Join(source, "green.png")
@@ -127,20 +131,21 @@ func TestBackupReplacesMissingCopyAndDetectsChangedTime(t *testing.T) {
 	}
 	restoreSource(t, path, contents, info.ModTime())
 	second, err := s.StartBackup(source, destination, nil)
-	if err != nil || second.Success != 1 {
+	if err != nil || second.Skipped != 1 || second.Success != 0 {
 		t.Fatalf("missing copy: %+v, %v", second, err)
 	}
-	sourceMustBeGone(t, path)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
+	}
 	modified := time.Now().Add(time.Hour)
 	restoreSource(t, path, contents, modified)
 	third, err := s.StartBackup(source, destination, nil)
-	if err != nil || third.Success != 1 || third.Skipped != 0 {
+	if err != nil || third.Success != 0 || third.Skipped != 1 {
 		t.Fatalf("changed source: %+v, %v", third, err)
 	}
-	if third.Results[0].BackupPath == second.Results[0].BackupPath {
-		t.Fatal("overwrote existing copy")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatal(err)
 	}
-	sourceMustBeGone(t, path)
 }
 
 func TestBackupMoveSkipsDuplicateDestination(t *testing.T) {

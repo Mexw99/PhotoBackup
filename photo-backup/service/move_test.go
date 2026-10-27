@@ -94,7 +94,7 @@ func TestMoveSkipsDestinationRecordedInDatabase(t *testing.T) {
 	}
 }
 
-func TestMoveRetryFinishesSourceRemovalWithoutAnotherCopy(t *testing.T) {
+func TestMoveRetryKeepsDuplicateSourceWithoutAnotherCopy(t *testing.T) {
 	s, db := newMoveService(t)
 	source, destination := t.TempDir(), t.TempDir()
 	path := filepath.Join(source, "red.png")
@@ -116,11 +116,11 @@ func TestMoveRetryFinishesSourceRemovalWithoutAnotherCopy(t *testing.T) {
 	}
 	s.removeSource = os.Remove
 	second, err := s.StartBackup(source, destination, nil)
-	if err != nil || second.Skipped != 1 || second.Failed != 0 || second.Success != 0 || second.Results[0].BackupPath != first.Results[0].BackupPath {
+	if err != nil || second.Skipped != 1 || second.Failed != 0 || second.Success != 0 || second.Results[0].BackupPath != "" {
 		t.Fatalf("retry: %+v, %v", second, err)
 	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("retry left source behind: %v", err)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("duplicate source must stay: %v", err)
 	}
 	files, err := os.ReadDir(destination)
 	if err != nil || len(files) != 1 {
@@ -134,7 +134,7 @@ func TestMoveRetryFinishesSourceRemovalWithoutAnotherCopy(t *testing.T) {
 	}
 }
 
-func TestMoveRetryVerifiesBytesBeforeDeletingSource(t *testing.T) {
+func TestMoveRetryNeverDeletesSourceWhenCopyChanged(t *testing.T) {
 	s, _ := newMoveService(t)
 	source, destination := t.TempDir(), t.TempDir()
 	path := filepath.Join(source, "red.png")
@@ -151,15 +151,12 @@ func TestMoveRetryVerifiesBytesBeforeDeletingSource(t *testing.T) {
 	}
 	s.removeSource = os.Remove
 	second, err := s.StartBackup(source, destination, nil)
-	if err != nil || second.Success != 1 || second.Skipped != 0 || second.Results[0].BackupPath == first.Results[0].BackupPath {
+	if err != nil || second.Success != 0 || second.Skipped != 1 || second.Results[0].BackupPath != "" {
 		t.Fatalf("retry accepted altered copy: %+v, %v", second, err)
 	}
-	actual, err := os.ReadFile(second.Results[0].BackupPath)
+	actual, err := os.ReadFile(path)
 	if err != nil || !bytes.Equal(actual, contents) {
 		t.Fatalf("retry did not preserve original bytes: %v", err)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("successful retry left source: %v", err)
 	}
 }
 
@@ -230,14 +227,11 @@ func TestMoveRetryDoesNotReuseSymlinkToSource(t *testing.T) {
 	}
 	s.removeSource = os.Remove
 	second, err := s.StartBackup(source, destination, nil)
-	if err != nil || second.Success != 1 || second.Skipped != 0 || second.Results[0].BackupPath == first.Results[0].BackupPath {
+	if err != nil || second.Success != 0 || second.Skipped != 1 || second.Results[0].BackupPath != "" {
 		t.Fatalf("reused symlink instead of preparing a file: %+v, %v", second, err)
 	}
-	actual, err := os.ReadFile(second.Results[0].BackupPath)
+	actual, err := os.ReadFile(path)
 	if err != nil || !bytes.Equal(actual, contents) {
 		t.Fatalf("moved bytes lost: %v", err)
-	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Fatalf("source remains: %v", err)
 	}
 }

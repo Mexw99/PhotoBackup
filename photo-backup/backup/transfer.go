@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 )
 
@@ -16,6 +15,8 @@ var copyBufferPool = sync.Pool{
 		return &buffer
 	},
 }
+
+var ErrDuplicateName = errors.New("พบชื่อไฟล์ซ้ำในปลายทาง จึงเก็บต้นฉบับไว้โดยไม่เขียนทับ")
 
 type BackupResult struct {
 	OriginalName string `json:"originalName"`
@@ -50,37 +51,32 @@ func CopyImage(image ImageFile, destDir string) (BackupResult, error) {
 	}
 	defer source.Close()
 
-	// O_EXCL ป้องกันการเขียนทับไฟล์เดิม แม้มีไฟล์ชื่อเดียวกัน
-	for number := 0; ; number++ {
-		name := image.Name
-		if number > 0 {
-			extension := filepath.Ext(name)
-			name = fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(name, extension), number, extension)
-		}
-		destination := filepath.Join(destDir, name)
-		file, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
-		if errors.Is(err, os.ErrExist) {
-			continue
-		}
-		if err != nil {
-			return result, err
-		}
-
-		buffer := copyBufferPool.Get().(*[]byte)
-		written, copyErr := io.CopyBuffer(file, source, *buffer)
-		copyBufferPool.Put(buffer)
-		closeErr := file.Close()
-		if copyErr == nil {
-			copyErr = closeErr
-		}
-		if copyErr == nil && written != image.Size {
-			copyErr = fmt.Errorf("ไฟล์ต้นทางเปลี่ยนระหว่างสำรอง กรุณาลองใหม่")
-		}
-		if copyErr != nil {
-			_ = os.Remove(destination)
-			return result, copyErr
-		}
-		result.BackupPath, result.Success = destination, true
-		return result, nil
+	destination := filepath.Join(destDir, image.Name)
+	file, err := os.OpenFile(destination, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+	if errors.Is(err, os.ErrExist) {
+		return result, ErrDuplicateName
 	}
+	if err != nil {
+		return result, err
+	}
+
+	buffer := copyBufferPool.Get().(*[]byte)
+	written, copyErr := io.CopyBuffer(file, source, *buffer)
+	copyBufferPool.Put(buffer)
+	if copyErr == nil {
+		copyErr = file.Sync()
+	}
+	closeErr := file.Close()
+	if copyErr == nil {
+		copyErr = closeErr
+	}
+	if copyErr == nil && written != image.Size {
+		copyErr = fmt.Errorf("ไฟล์ต้นทางเปลี่ยนระหว่างสำรอง กรุณาลองใหม่")
+	}
+	if copyErr != nil {
+		_ = os.Remove(destination)
+		return result, copyErr
+	}
+	result.BackupPath, result.Success = destination, true
+	return result, nil
 }

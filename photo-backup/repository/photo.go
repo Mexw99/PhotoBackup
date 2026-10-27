@@ -125,7 +125,7 @@ func (r *Repository) GetPhoto(id uint) (*model.Photo, error) {
 func (r *Repository) PendingAnalysisPhotoIDs() ([]uint, error) {
 	var ids []uint
 	if err := r.db.Model(&model.Photo{}).
-		Where("analysis_status IN ?", []string{model.AnalysisPending, model.AnalysisProcessing}).
+		Where("analysis_status IN ?", []string{model.AnalysisPending, model.AnalysisProcessing, model.AnalysisRetrying}).
 		Order("id ASC").Pluck("id", &ids).Error; err != nil {
 		return nil, err
 	}
@@ -150,6 +150,24 @@ func (r *Repository) SetPhotoAnalysisStatus(id uint, status, message string) err
 }
 
 func (r *Repository) SavePhotoAnalysis(id uint, description string, tagNames []string, contentHash string, analyzedAt time.Time) error {
+	description = strings.TrimSpace(description)
+	cleanTags := make([]string, 0, len(tagNames))
+	seenTags := make(map[string]struct{}, len(tagNames))
+	for _, name := range tagNames {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if _, exists := seenTags[name]; exists {
+			continue
+		}
+		seenTags[name] = struct{}{}
+		cleanTags = append(cleanTags, name)
+	}
+	if description == "" || len(cleanTags) == 0 {
+		return errors.New("ผลวิเคราะห์ต้องมีคำอธิบายและ Tag อย่างน้อยหนึ่งรายการ")
+	}
+
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		var photo model.Photo
 		if err := tx.First(&photo, id).Error; err != nil {
@@ -173,28 +191,25 @@ func (r *Repository) SavePhotoAnalysis(id uint, description string, tagNames []s
 				}
 			}
 		}
-		for _, name := range tagNames {
-			name = strings.TrimSpace(name)
-			if name == "" {
-				continue
-			}
+		for _, name := range cleanTags {
 			var tag model.Tag
 			if err := tx.Where("name = ?", name).
 				FirstOrCreate(&tag, model.Tag{Name: name}).Error; err != nil {
 				return err
 			}
 			var existing model.PhotoTag
-			err := tx.Where("photo_id = ? AND tag_id = ?", photo.ID, tag.ID).First(&existing).Error
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			lookup := tx.Where("photo_id = ? AND tag_id = ?", photo.ID, tag.ID).Limit(1).Find(&existing)
+			if lookup.Error != nil {
+				return lookup.Error
+			}
+			if lookup.RowsAffected == 0 {
 				if err := tx.Create(&model.PhotoTag{PhotoID: photo.ID, TagID: tag.ID, Source: model.TagSourceAI}).Error; err != nil {
 					return err
 				}
-			} else if err != nil {
-				return err
 			}
 		}
 		return tx.Model(&photo).Updates(map[string]interface{}{
-			"description":     strings.TrimSpace(description),
+			"description":     description,
 			"analysis_status": model.AnalysisCompleted,
 			"analysis_error":  "",
 			"content_hash":    contentHash,
@@ -206,23 +221,44 @@ func (r *Repository) SavePhotoAnalysis(id uint, description string, tagNames []s
 type AnalysisCounts struct {
 	Pending    int64
 	Processing int64
+	Retrying   int64
 	Completed  int64
 	Failed     int64
 }
 
 func (r *Repository) AnalysisCounts() (AnalysisCounts, error) {
 	counts := AnalysisCounts{}
-	for status, target := range map[string]*int64{
+	var rows []struct {
+		Status string
+		Count  int64
+	}
+	if err := r.db.Model(&model.Photo{}).
+		Select("analysis_status AS status, COUNT(*) AS count").
+		Group("analysis_status").Scan(&rows).Error; err != nil {
+		return counts, err
+	}
+	targets := map[string]*int64{
 		model.AnalysisPending:    &counts.Pending,
 		model.AnalysisProcessing: &counts.Processing,
+		model.AnalysisRetrying:   &counts.Retrying,
 		model.AnalysisCompleted:  &counts.Completed,
 		model.AnalysisFailed:     &counts.Failed,
-	} {
-		if err := r.db.Model(&model.Photo{}).Where("analysis_status = ?", status).Count(target).Error; err != nil {
-			return AnalysisCounts{}, err
+	}
+	for _, row := range rows {
+		if target, ok := targets[row.Status]; ok {
+			*target = row.Count
 		}
 	}
 	return counts, nil
+}
+
+func (r *Repository) ListPhotosByIDs(ids []uint) ([]model.Photo, error) {
+	photos := []model.Photo{}
+	if len(ids) == 0 {
+		return photos, nil
+	}
+	err := r.db.Preload("Tags").Where("id IN ?", ids).Find(&photos).Error
+	return photos, err
 }
 
 func (r *Repository) ListPhotos() ([]model.Photo, error) {

@@ -67,6 +67,13 @@ func TestProgressDemoFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	delta, err := app.GetTaggedPhotosByIDs([]uint{photos[0].ID})
+	if err != nil || len(delta) != 1 || len(delta[0].Tags) != 1 || delta[0].Thumbnail == "" {
+		t.Fatalf("delta API: %+v, %v", delta, err)
+	}
+	if _, err := app.GetTaggedPhotosByIDs(make([]uint, 101)); err == nil {
+		t.Fatal("delta API must reject oversized requests")
+	}
 	for _, search := range []struct {
 		name  string
 		query string

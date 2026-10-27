@@ -58,6 +58,10 @@ export function GetTaggedPhotos() {
   return window['go']['main']['App']['GetTaggedPhotos']();
 }
 
+export function GetTaggedPhotosByIDs(arg1) {
+  return window['go']['main']['App']['GetTaggedPhotosByIDs'](arg1);
+}
+
 export function GetTags() {
   return window['go']['main']['App']['GetTags']();
 }
@@ -84,6 +88,10 @@ export function SaveBackupSettings(arg1, arg2) {
 
 export function SearchPhotoLibrary(arg1, arg2) {
   return window['go']['main']['App']['SearchPhotoLibrary'](arg1, arg2);
+}
+
+export function SearchPhotoPage(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['SearchPhotoPage'](arg1, arg2, arg3, arg4);
 }
 
 export function SearchPhotos(arg1) {

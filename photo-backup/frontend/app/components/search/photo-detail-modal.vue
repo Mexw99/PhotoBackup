@@ -121,6 +121,7 @@ function analysisStatusLabel(status: string) {
   return {
     pending: "รอวิเคราะห์",
     processing: "กำลังวิเคราะห์",
+    retrying: "กำลัง Retry / รอลองใหม่",
     completed: "วิเคราะห์แล้ว",
     failed: "วิเคราะห์ไม่สำเร็จ",
   }[status] || "รอวิเคราะห์";

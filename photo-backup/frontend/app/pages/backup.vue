@@ -196,14 +196,14 @@
       </p>
 
       <!-- สรุปผล -->
-      <div v-if="backupDone" class="result-summary">
+      <div v-if="backupDone" class="result-summary" role="status" aria-live="polite">
         <div class="result-card success">
           <strong>{{ backupSummary.success }}</strong>
           <span>ย้ายสำเร็จ</span>
         </div>
         <div class="result-card skipped">
           <strong>{{ backupSummary.skipped }}</strong>
-          <span>ข้าม / แจ้งเตือน</span>
+          <span>ข้าม (ชื่อซ้ำ)</span>
         </div>
         <div class="result-card error">
           <strong>{{ backupSummary.failed }}</strong>
@@ -212,7 +212,7 @@
       </div>
 
       <div v-if="backupDone && skippedResults.length > 0" class="skipped-list">
-        <h3>รายการที่ข้ามหรือแจ้งเตือน:</h3>
+        <h3>พบชื่อไฟล์ซ้ำ — ไม่ได้ย้ายและเก็บต้นฉบับไว้:</h3>
         <ul class="file-list">
           <li
             v-for="result in skippedResults"
@@ -220,7 +220,10 @@
             class="file-item"
           >
             <span class="file-name">{{ result.originalName }}</span>
-            <span class="file-size">{{ result.message || "ข้ามรายการนี้" }}</span>
+            <span class="file-size">
+              {{ result.message || "พบชื่อไฟล์ซ้ำ จึงไม่ได้ย้ายไฟล์นี้" }}
+              <br />ต้นฉบับ: {{ result.originalPath }}
+            </span>
           </li>
         </ul>
       </div>
@@ -493,6 +496,10 @@ button:disabled {
   color: #64748b;
   flex: 0 0 auto;
   font-size: 0.85rem;
+  max-width: 70%;
+  overflow-wrap: anywhere;
+  text-align: right;
+  white-space: normal;
 }
 
 /* ======== Progress Bar ======== */

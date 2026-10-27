@@ -4,7 +4,7 @@
       {{ emptyText }}
     </div>
     <div v-else class="grid">
-      <div v-for="photo in photos" :key="photo.id" class="photo-card">
+      <div v-for="photo in photos" :key="photo.id" :data-photo-id="photo.id" class="photo-card">
         <input
           type="checkbox"
           :checked="selectedIDs.includes(photo.id)"
@@ -17,6 +17,7 @@
           :src="photo.thumbnail"
           class="photo-thumb"
           :alt="photo.originalName"
+          loading="lazy"
         />
         <div v-else class="photo-icon">📷</div>
         <div class="photo-info">
@@ -68,6 +69,7 @@ function analysisStatusLabel(status: string) {
   return {
     pending: "รอวิเคราะห์",
     processing: "กำลังวิเคราะห์",
+    retrying: "กำลัง Retry / รอลองใหม่",
     completed: "วิเคราะห์แล้ว",
     failed: "วิเคราะห์ไม่สำเร็จ",
   }[status] || "รอวิเคราะห์";

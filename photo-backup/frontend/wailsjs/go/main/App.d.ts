@@ -32,6 +32,8 @@ export function GetTagCount():Promise<number>;
 
 export function GetTaggedPhotos():Promise<Array<main.TaggedPhotoSummary>>;
 
+export function GetTaggedPhotosByIDs(arg1:Array<number>):Promise<Array<main.TaggedPhotoSummary>>;
+
 export function GetTags():Promise<Array<main.TagSummary>>;
 
 export function Greet(arg1:string):Promise<string>;
@@ -45,6 +47,8 @@ export function RetryFailedAnalysis():Promise<number>;
 export function SaveBackupSettings(arg1:string,arg2:string):Promise<void>;
 
 export function SearchPhotoLibrary(arg1:string,arg2:Array<string>):Promise<Array<main.TaggedPhotoSummary>>;
+
+export function SearchPhotoPage(arg1:string,arg2:Array<string>,arg3:number,arg4:number):Promise<main.PhotoSearchPage>;
 
 export function SearchPhotos(arg1:Array<string>):Promise<Array<main.TaggedPhotoSummary>>;
 

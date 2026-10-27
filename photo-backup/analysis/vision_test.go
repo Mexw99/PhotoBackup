@@ -71,12 +71,17 @@ func TestVisionClientRetriesTransientResponse(t *testing.T) {
 	}
 
 	client := NewVisionClient("test-key", "test-model", server.URL, &http.Client{Timeout: 5 * time.Second})
-	result, err := client.AnalyzeImage(context.Background(), path)
+	retries := 0
+	ctx := WithRetryNotifier(context.Background(), func() { retries++ })
+	result, err := client.AnalyzeImage(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if attempts != 2 || result.Description != "รูปทดสอบ" || len(result.Tags) != 1 {
 		t.Fatalf("unexpected retry result: attempts=%d result=%+v", attempts, result)
+	}
+	if retries != 1 {
+		t.Fatalf("retry notifications = %d, want 1", retries)
 	}
 }
 

@@ -2,25 +2,22 @@ package main
 
 import (
 	"embed"
-	"errors"
-	"os"
 
+	"photo-backup/config"
 	"photo-backup/database"
 	"photo-backup/repository"
 	"photo-backup/service"
 
-	"github.com/joho/godotenv"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
-	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := config.LoadEnv(); err != nil {
 		println("Warning: could not load .env:", err.Error())
 	}
 
@@ -29,11 +26,6 @@ func main() {
 	app.database, app.dbPath, app.dbErr = db, path, dbErr
 	if dbErr == nil {
 		app.service = service.New(repository.New(db.GORM()))
-		app.service.SetAnalysisNotifier(func(progress service.AnalysisProgress) {
-			if app.ctx != nil {
-				runtime.EventsEmit(app.ctx, "photo:analysis", progress)
-			}
-		})
 	}
 
 	err := wails.Run(&options.App{

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,14 +45,47 @@ func NewWithAnalyzer(store repository.Store, analyzer PhotoAnalyzer) *Service {
 		analysisQueued: make(map[uint]struct{}),
 	}
 	if analyzer != nil {
-		s.startAnalysisWorkers(3)
-		go s.resumePendingAnalysis()
+		s.startAnalysisWorkers(analysisWorkerCount(analyzer))
+		s.analysisWG.Add(1)
+		go func() {
+			defer s.analysisWG.Done()
+			s.resumePendingAnalysis()
+		}()
 	}
 	return s
 }
 
+func analysisWorkerCount(analyzer PhotoAnalyzer) int {
+	count := analysisEnvInt("AI_ANALYSIS_WORKERS", 4)
+	if count < 1 {
+		return 1
+	}
+	if count > 8 {
+		count = 8
+	}
+	if keyCounter, ok := analyzer.(interface{ APIKeyCount() int }); ok {
+		keyCount := keyCounter.APIKeyCount()
+		if keyCount > 0 && count > keyCount {
+			count = keyCount
+		}
+	}
+	return count
+}
+
+func analysisEnvInt(name string, fallback int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(name)))
+	if err != nil {
+		return fallback
+	}
+	return value
+}
+
 // SetContext is called once during Wails startup before frontend requests begin.
-func (s *Service) SetContext(ctx context.Context) { s.ctx = ctx }
+func (s *Service) SetContext(ctx context.Context) {
+	s.analysisMu.Lock()
+	defer s.analysisMu.Unlock()
+	s.ctx = ctx
+}
 
 func (s *Service) Close() {
 	if s == nil || s.analysisCancel == nil {
@@ -68,6 +103,9 @@ func (s *Service) Close() {
 }
 
 func (s *Service) operation() (repository.Store, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
+	s.analysisMu.Lock()
+	parent := s.ctx
+	s.analysisMu.Unlock()
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	return s.store.WithContext(ctx), cancel
 }

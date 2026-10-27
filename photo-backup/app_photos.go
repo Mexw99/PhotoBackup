@@ -41,7 +41,7 @@ func (a *App) GetRecentPhotos(limit int) []PhotoSummary {
 			OriginalName:   photo.OriginalName,
 			BackupPath:     photo.BackupPath,
 			BackedUpAt:     photo.BackedUpAt.Format("2006-01-02 15:04:05"),
-			Thumbnail:      service.ReadImageDataURL(photo.BackupPath),
+			Thumbnail:      service.ReadImageThumbnailDataURL(photo.BackupPath),
 			Description:    photo.Description,
 			AnalysisStatus: photo.AnalysisStatus,
 			AnalysisError:  photo.AnalysisError,
@@ -56,6 +56,17 @@ func (a *App) GetTaggedPhotos() ([]TaggedPhotoSummary, error) {
 		return nil, fmt.Errorf("database is not ready")
 	}
 	photos, err := a.service.ListPhotos()
+	if err != nil {
+		return nil, err
+	}
+	return taggedPhotoSummaries(photos), nil
+}
+
+func (a *App) GetTaggedPhotosByIDs(ids []uint) ([]TaggedPhotoSummary, error) {
+	if a.service == nil {
+		return nil, fmt.Errorf("database is not ready")
+	}
+	photos, err := a.service.ListPhotosByIDs(ids)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +95,22 @@ func (a *App) SearchPhotoLibrary(query string, tagNames []string) ([]TaggedPhoto
 	return taggedPhotoSummaries(photos), nil
 }
 
+type PhotoSearchPage struct {
+	Photos []TaggedPhotoSummary `json:"photos"`
+	Total  int64                `json:"total"`
+}
+
+func (a *App) SearchPhotoPage(query string, tags []string, page, size int) (PhotoSearchPage, error) {
+	if a.service == nil {
+		return PhotoSearchPage{}, fmt.Errorf("database is not ready")
+	}
+	result, err := a.service.SearchPhotoPage(query, tags, page, size)
+	if err != nil {
+		return PhotoSearchPage{}, err
+	}
+	return PhotoSearchPage{Photos: taggedPhotoSummaries(result.Photos), Total: result.Total}, nil
+}
+
 // Keep JSON formatting in the presentation layer, shared by gallery and search.
 func taggedPhotoSummaries(photos []model.Photo) []TaggedPhotoSummary {
 	result := make([]TaggedPhotoSummary, 0, len(photos))
@@ -101,7 +128,7 @@ func taggedPhotoSummaries(photos []model.Photo) []TaggedPhotoSummary {
 			OriginalName:   photo.OriginalName,
 			BackupPath:     photo.BackupPath,
 			BackedUpAt:     photo.BackedUpAt.Format("2006-01-02 15:04:05"),
-			Thumbnail:      service.ReadImageDataURL(photo.BackupPath),
+			Thumbnail:      service.ReadImageThumbnailDataURL(photo.BackupPath),
 			Description:    photo.Description,
 			AnalysisStatus: photo.AnalysisStatus,
 			AnalysisError:  photo.AnalysisError,

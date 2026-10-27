@@ -24,11 +24,16 @@ export function useDashboard() {
     enabled: false,
     pending: 0,
     processing: 0,
+    retrying: 0,
     completed: 0,
     failed: 0,
   });
   const errorMessage = ref("");
   const retryingAnalysis = ref(false);
+	let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+	let refreshInFlight = false;
+	let refreshQueued = false;
+	let mounted = false;
 
   async function loadDashboard() {
     try {
@@ -57,12 +62,38 @@ export function useDashboard() {
     }
   }
 
+	async function refreshDashboard() {
+		if (refreshInFlight) {
+			refreshQueued = true;
+			return;
+		}
+		refreshInFlight = true;
+		try {
+			await loadDashboard();
+		} finally {
+			refreshInFlight = false;
+			if (refreshQueued && mounted) {
+				refreshQueued = false;
+				scheduleRefresh("completed");
+			}
+		}
+	}
+
+	function scheduleRefresh(status?: string) {
+		if (!mounted) return;
+		if (refreshTimer) return;
+		refreshTimer = setTimeout(() => {
+			refreshTimer = undefined;
+			void refreshDashboard();
+		}, 1000);
+	}
+
   async function retryFailedAnalysis() {
     if (retryingAnalysis.value) return;
     retryingAnalysis.value = true;
     try {
       await RetryFailedAnalysis();
-      await loadDashboard();
+      await refreshDashboard();
     } finally {
       retryingAnalysis.value = false;
     }
@@ -70,10 +101,17 @@ export function useDashboard() {
 
   let stopAnalysis: (() => void) | undefined;
   onMounted(() => {
-    stopAnalysis = EventsOn("photo:analysis", loadDashboard);
-    loadDashboard();
+		mounted = true;
+    stopAnalysis = EventsOn("photo:analysis", (progress: { status?: string }) => {
+      scheduleRefresh(progress?.status);
+    });
+    void refreshDashboard();
   });
-  onUnmounted(() => stopAnalysis?.());
+  onUnmounted(() => {
+		mounted = false;
+    stopAnalysis?.();
+    if (refreshTimer) clearTimeout(refreshTimer);
+  });
 
   return {
     databaseStatus,

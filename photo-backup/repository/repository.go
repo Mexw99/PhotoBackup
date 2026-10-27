@@ -29,6 +29,7 @@ type Store interface {
 	GetSettings() (model.Setting, error)
 	SaveSettings(string, string) error
 	ListPhotos() ([]model.Photo, error)
+	ListPhotosByIDs([]uint) ([]model.Photo, error)
 	RecentPhotos(int) ([]model.Photo, error)
 	CountPhotos() (int64, error)
 	ListTags() ([]model.Tag, error)
@@ -38,6 +39,7 @@ type Store interface {
 	DeleteTag(uint) error
 	SearchPhotosByTags([]string) ([]model.Photo, error)
 	SearchPhotos(string, []string) ([]model.Photo, error)
+	SearchPhotoPage(string, []string, int, int) (PhotoPage, error)
 	GetTagCloud() ([]TagCount, error)
 }
 

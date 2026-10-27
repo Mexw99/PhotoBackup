@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"photo-backup/internal/imageguard"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -22,6 +23,9 @@ const (
 	defaultVisionEndpoint = "https://generativelanguage.googleapis.com/v1beta/interactions"
 	defaultVisionModel    = "gemini-3.5-flash"
 	maxImageDimension     = 1600
+	maxDirectImageBytes   = 8 << 20
+	maxSourceImageBytes   = 100 << 20
+	maxDecodedImagePixels = 50000000
 	maxTags               = 8
 	maxBatchImages        = 5
 	maxVisionAttempts     = 4
@@ -76,6 +80,13 @@ func NewVisionClientWithKeys(apiKeys []string, model, endpoint string, client *h
 		endpoint: strings.TrimRight(strings.TrimSpace(endpoint), "/"),
 		client:   client,
 	}
+}
+
+func (c *VisionClient) APIKeyCount() int {
+	if c == nil {
+		return 0
+	}
+	return len(c.apiKeys)
 }
 
 func (c *VisionClient) AnalyzeImage(ctx context.Context, path string) (Result, error) {
@@ -320,15 +331,16 @@ func (c *VisionClient) doRequest(ctx context.Context, body []byte) ([]byte, erro
 		if err == nil && !retryableVisionStatus(response.StatusCode) {
 			break
 		}
-		if response != nil {
-			response.Body.Close()
-		}
 		if attempt == maxVisionAttempts-1 {
 			if err != nil {
 				return nil, fmt.Errorf("เชื่อมต่อ Gemini ไม่สำเร็จ: %w", err)
 			}
 			break
 		}
+		if response != nil {
+			response.Body.Close()
+		}
+		NotifyRetry(ctx)
 
 		wait := time.Duration(1<<attempt) * time.Second
 		select {
@@ -404,6 +416,9 @@ func normalizeResult(result Result) (Result, error) {
 	if result.Description == "" {
 		return Result{}, fmt.Errorf("Gemini ไม่ส่งคำอธิบายรูปภาพ")
 	}
+	if len(result.Tags) == 0 {
+		return Result{}, fmt.Errorf("Gemini ไม่ส่ง Tag ของรูปภาพ")
+	}
 	return result, nil
 }
 
@@ -452,6 +467,15 @@ func appendUniqueAPIKeys(keys []string, values ...string) []string {
 }
 
 func imageData(path string) (string, string, error) {
+	imageguard.Decode.Lock()
+	defer imageguard.Decode.Unlock()
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return "", "", err
+	}
+	if fileInfo.Size() > maxSourceImageBytes {
+		return "", "", fmt.Errorf("ไฟล์รูปใหญ่เกินขนาดที่รองรับ %d MB", maxSourceImageBytes>>20)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return "", "", err
@@ -460,13 +484,16 @@ func imageData(path string) (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+	if int64(config.Width)*int64(config.Height) > maxDecodedImagePixels {
+		return "", "", fmt.Errorf("รูปมีจำนวนพิกเซลมากเกินขนาดที่รองรับ")
+	}
 	mimeType := "image/jpeg"
 	if format == "png" {
 		mimeType = "image/png"
 	} else if format == "gif" {
 		mimeType = "image/gif"
 	}
-	if max(config.Width, config.Height) <= maxImageDimension {
+	if max(config.Width, config.Height) <= maxImageDimension && len(data) <= maxDirectImageBytes {
 		return mimeType, base64.StdEncoding.EncodeToString(data), nil
 	}
 

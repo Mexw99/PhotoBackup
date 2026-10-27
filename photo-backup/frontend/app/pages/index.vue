@@ -25,8 +25,8 @@
         <span>AI วิเคราะห์แล้ว</span>
         <strong>{{ analysisStatus.completed }}</strong>
         <small v-if="!analysisStatus.enabled">ยังไม่ได้ตั้งค่า AI</small>
-        <small v-else-if="analysisStatus.pending || analysisStatus.processing">
-          รอ {{ analysisStatus.pending + analysisStatus.processing }} รูป
+        <small v-else-if="analysisStatus.pending || analysisStatus.processing || analysisStatus.retrying">
+          รอ {{ analysisStatus.pending + analysisStatus.processing + analysisStatus.retrying }} รูป
         </small>
         <small v-else-if="analysisStatus.failed">ล้มเหลว {{ analysisStatus.failed }} รูป</small>
         <button
@@ -120,6 +120,7 @@ function analysisStatusLabel(status: string) {
   return {
     pending: "รอวิเคราะห์",
     processing: "กำลังวิเคราะห์",
+    retrying: "กำลัง Retry / รอลองใหม่",
     completed: "วิเคราะห์แล้ว",
     failed: "วิเคราะห์ไม่สำเร็จ",
   }[status] || "รอวิเคราะห์";

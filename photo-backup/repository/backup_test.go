@@ -55,6 +55,26 @@ func TestSaveBackupPersistsPhotoHistoryAndAIAnalysis(t *testing.T) {
 	}
 }
 
+func TestSavePhotoAnalysisRejectsIncompleteAIResult(t *testing.T) {
+	repo := newTestRepository(t)
+	photo := createTestPhoto(t, repo, "incomplete.jpg")
+
+	if err := repo.SavePhotoAnalysis(photo.ID, "", []string{"tag"}, "hash", time.Now()); err == nil {
+		t.Fatal("expected empty description to be rejected")
+	}
+	if err := repo.SavePhotoAnalysis(photo.ID, "คำอธิบาย", []string{"  "}, "hash", time.Now()); err == nil {
+		t.Fatal("expected empty tags to be rejected")
+	}
+
+	saved, err := repo.GetPhoto(photo.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.AnalysisStatus != model.AnalysisPending || saved.Description != "" || len(saved.Tags) != 0 {
+		t.Fatalf("incomplete result changed photo: %+v", saved)
+	}
+}
+
 func TestFindBackupUsesHistoryForSelectedDestination(t *testing.T) {
 	repo := newTestRepository(t)
 	base := t.TempDir()

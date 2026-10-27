@@ -23,6 +23,7 @@ type Photo struct {
 const (
 	AnalysisPending    = "pending"
 	AnalysisProcessing = "processing"
+	AnalysisRetrying   = "retrying"
 	AnalysisCompleted  = "completed"
 	AnalysisFailed     = "failed"
 )

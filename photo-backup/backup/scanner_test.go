@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -77,11 +78,8 @@ func TestCopyImageDoesNotOverwrite(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := CopyImage(ImageFile{Name: "same.jpg", Path: path, Size: 3}, destination)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if filepath.Base(result.BackupPath) != "same (1).jpg" {
-		t.Fatal(result.BackupPath)
+	if !errors.Is(err, ErrDuplicateName) || result.Success || result.BackupPath != "" {
+		t.Fatalf("expected name collision without a renamed copy: %+v, %v", result, err)
 	}
 	data, err := os.ReadFile(filepath.Join(destination, "same.jpg"))
 	if err != nil || string(data) != "old" {

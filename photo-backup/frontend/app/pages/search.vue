@@ -1,5 +1,5 @@
 <template>
-  <div class="search-page">
+  <div ref="pageRoot" class="search-page">
     <!-- Header -->
     <header class="page-header">
       <div class="header-titles">
@@ -38,7 +38,7 @@
             type="search"
             placeholder="เช่น IMG_001.jpg"
           />
-          <button type="submit" class="retry-btn" :disabled="initialLoading || searching">
+          <button type="submit" class="retry-btn" :disabled="initialLoading">
             ค้นหา
           </button>
         </div>
@@ -66,14 +66,15 @@
       <div class="results-header">
         <div class="results-title-group">
           <h2>ผลการค้นหา</h2>
-          <span v-if="!searching && !initialLoading" class="result-count-badge">
-            {{ photos.length }} รูปภาพ
+          <span v-if="!initialLoading" class="result-count-badge">
+            {{ total.toLocaleString() }} รูปภาพ · หน้านี้ {{ photos.length }} รูป
           </span>
         </div>
       </div>
 
       <!-- Loading State -->
-      <div v-if="searching || initialLoading" class="state-view loading-view">
+      <p class="search-update" role="status">{{ searching && !initialLoading ? 'กำลังอัปเดตผลการค้นหา...' : '\u00a0' }}</p>
+      <div v-if="initialLoading" class="state-view loading-view">
         <div class="spinner"></div>
         <p>กำลังค้นหาข้อมูลรูปภาพจากฐานข้อมูล...</p>
       </div>
@@ -96,6 +97,7 @@
         <article
           v-for="photo in photos"
           :key="photo.id"
+          :data-photo-id="photo.id"
           class="photo-card"
           @click="openPhotoDetail(photo)"
         >
@@ -105,6 +107,7 @@
               :src="photo.thumbnail"
               class="photo-thumb"
               :alt="photo.originalName"
+              loading="lazy"
             />
             <span v-else class="camera-icon">📷</span>
           </div>
@@ -150,6 +153,11 @@
           </div>
         </article>
       </div>
+      <nav v-if="total > pageSize" class="pagination" aria-label="หน้าผลการค้นหา">
+        <button type="button" class="retry-btn" :disabled="page <= 1 || searching" @click="changePage(page - 1)">หน้าก่อน</button>
+        <span>หน้า {{ page }} / {{ pageCount }} · แสดงไม่เกิน {{ pageSize }} รูปต่อหน้า</span>
+        <button type="button" class="retry-btn" :disabled="page >= pageCount || searching" @click="changePage(page + 1)">หน้าถัดไป</button>
+      </nav>
     </section>
 
     <!-- Modal รายละเอียดรูปภาพ -->
@@ -166,6 +174,7 @@ import TagCloud from "~/components/tag-cloud/tag-cloud.vue";
 import { usePhotoSearch } from "~/composables/usePhotoSearch";
 
 const {
+  pageRoot, page, pageCount, total, pageSize, changePage,
   tagCloud,
   photos,
   searchText,
@@ -185,6 +194,7 @@ function analysisStatusLabel(status: string) {
   return {
     pending: "รอวิเคราะห์",
     processing: "กำลังวิเคราะห์",
+    retrying: "กำลัง Retry / รอลองใหม่",
     completed: "วิเคราะห์แล้ว",
     failed: "วิเคราะห์ไม่สำเร็จ",
   }[status] || "รอวิเคราะห์";
@@ -218,11 +228,16 @@ function analysisStatusLabel(status: string) {
 }
 
 .search-page {
+  overflow-anchor: none;
   display: flex;
   flex-direction: column;
   gap: 20px;
   color: #1e293b;
 }
+
+.pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 24px; flex-wrap: wrap; }
+.search-update { min-height: 24px; }
+.cloud-section { max-height: 350px; overflow-y: auto; }
 
 /* Header */
 .page-header {
