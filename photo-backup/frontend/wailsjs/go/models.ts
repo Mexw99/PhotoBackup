@@ -1,5 +1,5 @@
 export namespace backup {
-
+	
 	export class BackupResult {
 	    originalName: string;
 	    originalPath: string;
@@ -9,11 +9,11 @@ export namespace backup {
 	    skipped: boolean;
 	    message: string;
 	    error: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BackupResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.originalName = source["originalName"];
@@ -32,11 +32,11 @@ export namespace backup {
 	    skipped: number;
 	    failed: number;
 	    results: BackupResult[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BackupSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.total = source["total"];
@@ -45,7 +45,7 @@ export namespace backup {
 	        this.failed = source["failed"];
 	        this.results = this.convertValues(source["results"], BackupResult);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -68,11 +68,11 @@ export namespace backup {
 	    name: string;
 	    path: string;
 	    size: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ImageFile(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -87,11 +87,11 @@ export namespace backup {
 	    message: string;
 	    expectedSize: number;
 	    actualSize: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new IntegrityResult(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.filename = source["filename"];
@@ -106,15 +106,15 @@ export namespace backup {
 }
 
 export namespace main {
-
+	
 	export class BackupSettings {
 	    sourcePath: string;
 	    destPath: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new BackupSettings(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sourcePath = source["sourcePath"];
@@ -131,11 +131,11 @@ export namespace main {
 	    analysisStatus: string;
 	    analysisError: string;
 	    analyzedAt: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new PhotoSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -153,11 +153,11 @@ export namespace main {
 	    id: number;
 	    name: string;
 	    photoCount: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TagCloudItem(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -168,11 +168,11 @@ export namespace main {
 	export class TagSummary {
 	    id: number;
 	    name: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TagSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -190,11 +190,11 @@ export namespace main {
 	    analysisError: string;
 	    analyzedAt: string;
 	    tags: TagSummary[];
-
+	
 	    static createFrom(source: any = {}) {
 	        return new TaggedPhotoSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -208,7 +208,7 @@ export namespace main {
 	        this.analyzedAt = source["analyzedAt"];
 	        this.tags = this.convertValues(source["tags"], TagSummary);
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -231,18 +231,18 @@ export namespace main {
 }
 
 export namespace service {
-
+	
 	export class AnalysisSummary {
 	    enabled: boolean;
 	    pending: number;
 	    processing: number;
 	    completed: number;
 	    failed: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new AnalysisSummary(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];

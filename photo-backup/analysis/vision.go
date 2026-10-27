@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -37,15 +38,17 @@ type ImageInput struct {
 }
 
 type VisionClient struct {
-	apiKey   string
+	apiKeys  []string
+	nextKey  atomic.Uint64
 	model    string
 	endpoint string
 	client   *http.Client
 }
 
 func NewVisionClientFromEnv() *VisionClient {
-	apiKey := strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
-	if apiKey == "" {
+	apiKeys := splitAPIKeys(os.Getenv("GEMINI_API_KEYS"))
+	apiKeys = appendUniqueAPIKeys(apiKeys, splitAPIKeys(os.Getenv("GEMINI_API_KEY"))...)
+	if len(apiKeys) == 0 {
 		return nil
 	}
 	model := strings.TrimSpace(os.Getenv("PHOTO_BACKUP_AI_MODEL"))
@@ -56,15 +59,19 @@ func NewVisionClientFromEnv() *VisionClient {
 	if endpoint == "" {
 		endpoint = defaultVisionEndpoint
 	}
-	return NewVisionClient(apiKey, model, endpoint, &http.Client{Timeout: 5 * time.Minute})
+	return NewVisionClientWithKeys(apiKeys, model, endpoint, &http.Client{Timeout: 5 * time.Minute})
 }
 
 func NewVisionClient(apiKey, model, endpoint string, client *http.Client) *VisionClient {
+	return NewVisionClientWithKeys(splitAPIKeys(apiKey), model, endpoint, client)
+}
+
+func NewVisionClientWithKeys(apiKeys []string, model, endpoint string, client *http.Client) *VisionClient {
 	if client == nil {
 		client = &http.Client{Timeout: 5 * time.Minute}
 	}
 	return &VisionClient{
-		apiKey:   strings.TrimSpace(apiKey),
+		apiKeys:  appendUniqueAPIKeys(nil, apiKeys...),
 		model:    strings.TrimSpace(model),
 		endpoint: strings.TrimRight(strings.TrimSpace(endpoint), "/"),
 		client:   client,
@@ -72,7 +79,7 @@ func NewVisionClient(apiKey, model, endpoint string, client *http.Client) *Visio
 }
 
 func (c *VisionClient) AnalyzeImage(ctx context.Context, path string) (Result, error) {
-	if c == nil || c.apiKey == "" {
+	if c == nil || len(c.apiKeys) == 0 {
 		return Result{}, fmt.Errorf("ยังไม่ได้ตั้งค่า GEMINI_API_KEY")
 	}
 	if c.endpoint == "" || c.model == "" {
@@ -133,7 +140,7 @@ func (c *VisionClient) AnalyzeImage(ctx context.Context, path string) (Result, e
 }
 
 func (c *VisionClient) AnalyzeImages(ctx context.Context, images []ImageInput) (map[uint]Result, error) {
-	if c == nil || c.apiKey == "" {
+	if c == nil || len(c.apiKeys) == 0 {
 		return nil, fmt.Errorf("ยังไม่ได้ตั้งค่า GEMINI_API_KEY")
 	}
 	if c.endpoint == "" || c.model == "" {
@@ -306,7 +313,7 @@ func (c *VisionClient) doRequest(ctx context.Context, body []byte) ([]byte, erro
 		if requestErr != nil {
 			return nil, requestErr
 		}
-		request.Header.Set("x-goog-api-key", c.apiKey)
+		request.Header.Set("x-goog-api-key", c.nextAPIKey())
 		request.Header.Set("Content-Type", "application/json")
 
 		response, err = c.client.Do(request)
@@ -343,6 +350,14 @@ func (c *VisionClient) doRequest(ctx context.Context, body []byte) ([]byte, erro
 		return nil, fmt.Errorf("Gemini ตอบกลับ HTTP %d: %s", response.StatusCode, compactError(responseBody))
 	}
 	return responseBody, nil
+}
+
+func (c *VisionClient) nextAPIKey() string {
+	if c == nil || len(c.apiKeys) == 0 {
+		return ""
+	}
+	index := c.nextKey.Add(1) - 1
+	return c.apiKeys[index%uint64(len(c.apiKeys))]
 }
 
 func retryableVisionStatus(status int) bool {
@@ -409,6 +424,29 @@ func normalizeTags(tags []string) []string {
 		if len(result) == maxTags {
 			break
 		}
+	}
+	return result
+}
+
+func splitAPIKeys(raw string) []string {
+	return appendUniqueAPIKeys(nil, strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == ';' || r == '\n' || r == '\r'
+	})...)
+}
+
+func appendUniqueAPIKeys(keys []string, values ...string) []string {
+	seen := make(map[string]struct{}, len(keys)+len(values))
+	result := make([]string, 0, len(keys)+len(values))
+	for _, key := range append(keys, values...) {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, key)
 	}
 	return result
 }

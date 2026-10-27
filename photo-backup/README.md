@@ -70,12 +70,15 @@ AI เก็บ `Description`, Tag, สถานะ, error และ hash ขอ
 cp .env.example .env
 ```
 
-แล้วแก้ค่า `GEMINI_API_KEY` ในไฟล์ `.env`:
+แล้วแก้ค่า `GEMINI_API_KEYS` ในไฟล์ `.env` โดยคั่นคีย์ด้วย comma:
 
 ```env
-GEMINI_API_KEY=ใส่คีย์จาก Google AI Studio ที่นี่
+GEMINI_API_KEYS=คีย์ที่1,คีย์ที่2,คีย์ที่3,คีย์ที่4
 PHOTO_BACKUP_AI_MODEL=gemini-3.5-flash
 ```
+
+ระบบจะหมุนใช้คีย์ตามคำขอและ Retry หากต้องการใช้คีย์เดียว ให้ใส่ใน `GEMINI_API_KEY` ได้
+ห้ามใส่คีย์จริงใน `.env.example` หรือ commit ไฟล์ `.env` ขึ้น Git
 
 จากนั้นรัน:
 
