@@ -80,6 +80,28 @@ export namespace backup {
 	        this.size = source["size"];
 	    }
 	}
+	export class IntegrityResult {
+	    filename: string;
+	    path: string;
+	    status: string;
+	    message: string;
+	    expectedSize: number;
+	    actualSize: number;
+
+	    static createFrom(source: any = {}) {
+	        return new IntegrityResult(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.filename = source["filename"];
+	        this.path = source["path"];
+	        this.status = source["status"];
+	        this.message = source["message"];
+	        this.expectedSize = source["expectedSize"];
+	        this.actualSize = source["actualSize"];
+	    }
+	}
 
 }
 

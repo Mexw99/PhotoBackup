@@ -6,6 +6,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -50,7 +51,7 @@ func restoreSource(t *testing.T, path string, data []byte, modified time.Time) {
 	}
 }
 
-func TestBackupMovesFilesAndSupportsChangedDestination(t *testing.T) {
+func TestBackupSkipsExistingFilenameAndKeepsSource(t *testing.T) {
 	s := newService(t)
 	source, destination := t.TempDir(), t.TempDir()
 	path := filepath.Join(source, "trip", "green.png")
@@ -79,7 +80,7 @@ func TestBackupMovesFilesAndSupportsChangedDestination(t *testing.T) {
 	// จำลองต้นทางเดิมที่ยังค้างอยู่ ต้องใช้สำเนาเดิมและลบต้นทางให้จบ
 	restoreSource(t, path, contents, info.ModTime())
 	second, err := s.StartBackup(source, destination, nil)
-	if err != nil || second.Skipped != 1 || second.Success != 0 {
+	if err != nil || second.Skipped != 0 || second.Success != 1 || second.Results[0].Skipped {
 		t.Fatalf("repeat: %+v, %v", second, err)
 	}
 	sourceMustBeGone(t, path)
@@ -99,7 +100,7 @@ func TestBackupMovesFilesAndSupportsChangedDestination(t *testing.T) {
 	sourceMustBeGone(t, path)
 	restoreSource(t, path, contents, info.ModTime())
 	backToFirst, err := s.StartBackup(source, destination, nil)
-	if err != nil || backToFirst.Skipped != 1 || backToFirst.Success != 0 {
+	if err != nil || backToFirst.Skipped != 0 || backToFirst.Success != 1 {
 		t.Fatalf("return to first destination: %+v, %v", backToFirst, err)
 	}
 	sourceMustBeGone(t, path)
@@ -134,36 +135,56 @@ func TestBackupReplacesMissingCopyAndDetectsChangedTime(t *testing.T) {
 	modified := time.Now().Add(time.Hour)
 	restoreSource(t, path, contents, modified)
 	third, err := s.StartBackup(source, destination, nil)
-	if err != nil || third.Success != 1 || third.Skipped != 0 {
+	if err != nil || third.Success != 0 || third.Skipped != 1 {
 		t.Fatalf("changed source: %+v, %v", third, err)
 	}
-	if third.Results[0].BackupPath == second.Results[0].BackupPath {
-		t.Fatal("overwrote existing copy")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("duplicate source should be preserved: %v", err)
 	}
-	sourceMustBeGone(t, path)
 }
 
-func TestBackupMoveDoesNotOverwriteDestination(t *testing.T) {
+func TestBackupSkipsCaseInsensitiveDestinationCollision(t *testing.T) {
 	s := newService(t)
 	source, destination := t.TempDir(), t.TempDir()
 	path := filepath.Join(source, "green.png")
 	writeSamplePhoto(t, path)
-	existing := filepath.Join(destination, "green.png")
+	existing := filepath.Join(destination, "GREEN.PNG")
 	if err := os.WriteFile(existing, []byte("existing file"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	summary, err := s.StartBackup(source, destination, nil)
-	if err != nil || summary.Success != 1 || summary.Skipped != 0 || summary.Results[0].BackupPath != filepath.Join(destination, "green (1).png") {
+	if err != nil || summary.Success != 0 || summary.Skipped != 1 || !strings.Contains(summary.Results[0].Message, "ชื่อไฟล์ซ้ำ") {
 		t.Fatalf("move with name collision: %+v, %v", summary, err)
 	}
-	sourceMustBeGone(t, path)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("source should remain after duplicate skip: %v", err)
+	}
 	oldData, err := os.ReadFile(existing)
 	if err != nil || string(oldData) != "existing file" {
 		t.Fatalf("existing file overwritten: %q, %v", oldData, err)
 	}
-	newData, err := os.ReadFile(summary.Results[0].BackupPath)
-	if err != nil || len(newData) == 0 {
-		t.Fatalf("renamed copy was not created: %v", err)
+	if _, err := os.Stat(filepath.Join(destination, "green (1).png")); !os.IsNotExist(err) {
+		t.Fatalf("duplicate should not create a renamed copy: %v", err)
+	}
+}
+
+func TestBackupSkipsRepeatedBasenameAcrossSourceSubfolders(t *testing.T) {
+	s := newService(t)
+	source, destination := t.TempDir(), t.TempDir()
+	first := filepath.Join(source, "a", "same.png")
+	second := filepath.Join(source, "b", "SAME.PNG")
+	writeSamplePhoto(t, first)
+	writeSamplePhoto(t, second)
+
+	summary, err := s.StartBackup(source, destination, nil)
+	if err != nil || summary.Total != 2 || summary.Success != 1 || summary.Skipped != 1 {
+		t.Fatalf("duplicate basenames: %+v, %v", summary, err)
+	}
+	if !strings.Contains(summary.Results[1].Message, "ชื่อไฟล์ซ้ำ") {
+		t.Fatalf("duplicate result should explain skip: %+v", summary.Results[1])
+	}
+	if _, err := os.Stat(second); err != nil {
+		t.Fatalf("duplicate source should be preserved: %v", err)
 	}
 }
 

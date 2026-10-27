@@ -25,6 +25,15 @@ export interface BackupProgress {
   name: string;
 }
 
+export interface IntegrityResult {
+  filename: string;
+  path: string;
+  status: string;
+  message: string;
+  expectedSize: number;
+  actualSize: number;
+}
+
 export interface AIQueueStatus {
   queued: number;
   processing: number;

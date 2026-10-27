@@ -91,6 +91,14 @@
         >
           {{ settingsSaving ? "กำลังบันทึก..." : "บันทึกโฟลเดอร์" }}
         </button>
+        <button
+          class="secondary-button"
+          type="button"
+          :disabled="!destPath || backupRunning || integrityLoading"
+          @click="checkDestination"
+        >
+          {{ integrityLoading ? "กำลังตรวจสอบปลายทาง..." : "ตรวจสอบปลายทางกับฐานข้อมูล" }}
+        </button>
         <span class="muted">ระบบจะบันทึกโฟลเดอร์ให้อีกครั้งเมื่อเริ่ม Backup</span>
       </div>
 
@@ -110,6 +118,33 @@
       <div v-if="loading" class="message">
         กำลังค้นหารูปภาพในโฟลเดอร์ย่อย...
       </div>
+    </section>
+
+    <section v-if="integrityDone" class="panel">
+      <div class="section-heading">
+        <h2>ผลตรวจสอบไฟล์ปลายทาง</h2>
+        <span class="count-badge">{{ integrityResults.length }}</span>
+      </div>
+      <div v-if="!integrityResults.length" class="empty-state">
+        ไม่มีรายการรูปภาพในฐานข้อมูลสำหรับโฟลเดอร์ปลายทางนี้
+      </div>
+      <ul v-else class="file-list">
+        <li
+          v-for="result in integrityResults"
+          :key="result.path"
+          class="file-item"
+          :class="result.status === 'OK' ? 'success-item' : 'error-item'"
+        >
+          <span class="file-name">{{ result.filename }}</span>
+          <span class="file-size">
+            [{{ result.status === 'OK' ? 'ปกติ' : 'พบปัญหา' }}] {{ result.message }}
+            <br />ปลายทาง: {{ result.path }}
+            <template v-if="result.status !== 'OK' && result.actualSize >= 0">
+              <br />ขนาดใน DB: {{ formatBytes(result.expectedSize) }} · ขนาดจริง: {{ formatBytes(result.actualSize) }}
+            </template>
+          </span>
+        </li>
+      </ul>
     </section>
 
     <!-- ======== รายการรูปภาพ ======== -->
@@ -175,7 +210,7 @@
         </div>
         <div class="result-card skipped">
           <strong>{{ backupSummary.skipped }}</strong>
-          <span>ใช้ไฟล์ปลายทางเดิม</span>
+          <span>ข้าม (ชื่อไฟล์ซ้ำ)</span>
         </div>
         <div class="result-card error">
           <strong>{{ backupSummary.failed }}</strong>
@@ -184,7 +219,7 @@
       </div>
 
       <div v-if="backupDone && skippedResults.length > 0" class="skipped-list">
-        <h3>รูปที่ไม่ได้ย้าย:</h3>
+        <h3>พบชื่อไฟล์ซ้ำ — ข้ามไฟล์นี้และเก็บต้นฉบับไว้:</h3>
         <ul class="file-list">
           <li
             v-for="result in skippedResults"
@@ -192,7 +227,10 @@
             class="file-item"
           >
             <span class="file-name">{{ result.originalName }}</span>
-            <span class="file-size">{{ result.message || "ใช้ไฟล์ปลายทางเดิม" }}</span>
+            <span class="file-size">
+              {{ result.message || "ข้ามไฟล์นี้เพราะชื่อไฟล์ซ้ำ" }}
+              <br />ต้นฉบับ: {{ result.originalPath }}
+            </span>
           </li>
         </ul>
       </div>
@@ -212,7 +250,10 @@
             class="file-item error-item"
           >
             <span class="file-name">{{ r.originalName }}</span>
-            <span class="file-size" style="color: #b91c1c">{{ r.error }}</span>
+            <span class="file-size" style="color: #b91c1c">
+              {{ r.error }}<br />ต้นฉบับ: {{ r.originalPath }}
+              <span v-if="r.backupPath"><br />ปลายทางที่เตรียมไว้: {{ r.backupPath }}</span>
+            </span>
           </li>
         </ul>
       </div>
@@ -287,6 +328,9 @@ const {
   successResults,
   skippedResults,
   failedResults,
+  integrityLoading,
+  integrityDone,
+  integrityResults,
   aiQueueStatus,
   aiElapsedLabel,
   aiProviderStatus,
@@ -295,6 +339,7 @@ const {
   clearSourceFolder,
   chooseDestFolder,
   clearDestFolder,
+  checkDestination,
   saveSettings,
   startBackup,
   formatBytes,

@@ -7,7 +7,15 @@ import (
 	"os"
 )
 
-// EqualFiles เทียบข้อมูลจริงทีละ 64 KB ก่อนยอมให้ลบต้นทาง
+type IntegrityResult struct {
+	Filename     string `json:"filename"`
+	Path         string `json:"path"`
+	Status       string `json:"status"`
+	Message      string `json:"message"`
+	ExpectedSize int64  `json:"expectedSize"`
+	ActualSize   int64  `json:"actualSize"`
+}
+
 func EqualFiles(sourcePath, destPath string) (bool, error) {
 	source, err := os.Open(sourcePath)
 	if err != nil {

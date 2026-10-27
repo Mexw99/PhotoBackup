@@ -6,6 +6,8 @@ import {backup} from '../models';
 
 export function AddTagToPhotos(arg1:Array<number>,arg2:string):Promise<main.TagSummary>;
 
+export function CheckBackup(arg1:string):Promise<Array<backup.IntegrityResult>>;
+
 export function DeleteTag(arg1:number):Promise<void>;
 
 export function GetAIProviderStatus():Promise<service.AIProviderStatus>;

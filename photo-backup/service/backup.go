@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,10 +62,11 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 	if err := s.SaveBackupSettings(sourcePath, destPath); err != nil {
 		return backup.BackupSummary{}, err
 	}
-	duplicatePaths, err := s.backupPathsInDestination(destPath)
+	destinationNames, err := s.backupNamesInDestination(destPath)
 	if err != nil {
 		return backup.BackupSummary{}, err
 	}
+	duplicateSources := destinationNames.duplicates(images)
 
 	summary := backup.BackupSummary{
 		Total:   len(images),
@@ -92,7 +94,7 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 			defer workers.Done()
 			for index := range jobs {
 				image := images[index]
-				result, err := s.backupPhoto(image, sourcePath, destPath, duplicatePaths)
+				result, err := s.backupPhoto(image, sourcePath, destPath, duplicateSources)
 				outcomes <- backupOutcome{index: index, image: image, result: result, err: err}
 			}
 		}()
@@ -128,7 +130,7 @@ func (s *Service) StartBackup(sourcePath, destPath string, onProgress backup.Pro
 	return summary, nil
 }
 
-func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath string, duplicatePaths map[string]struct{}) (backup.BackupResult, error) {
+func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath string, duplicateSources map[string]string) (backup.BackupResult, error) {
 	result := backup.BackupResult{OriginalName: image.Name, OriginalPath: image.Path, FileSize: image.Size}
 	info, err := os.Stat(image.Path)
 	if err != nil {
@@ -145,12 +147,11 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 		return result, err
 	}
 	if alreadyBackedUp(previous, info, destPath) {
-		equal, err := backup.EqualFiles(image.Path, previous.BackupPath)
-		if err != nil {
-			return result, err
+		equal, compareErr := backup.EqualFiles(image.Path, previous.BackupPath)
+		if compareErr != nil {
+			return result, compareErr
 		}
 		if equal {
-			// รูปเดิมไม่ต้องคัดลอกซ้ำ แต่เติม Hash จากไฟล์ปลายทางได้
 			if previous.ContentHash == nil {
 				hash, hashErr := analysis.SHA256File(previous.BackupPath)
 				if hashErr != nil {
@@ -166,13 +167,19 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 			}
 			s.enqueueAIJob(previous.ID, previous.ContentHash)
 			result.BackupPath = previous.BackupPath
-			result.Message = "ใช้ไฟล์ปลายทางเดิม ตรวจสอบแล้วตรงกัน และลบต้นฉบับสำเร็จ"
+			result.Message = "ใช้สำเนาจากรอบก่อนที่ตรวจสอบแล้วตรงกับต้นฉบับ และลบต้นฉบับสำเร็จ"
 			if err := s.finishMove(image.Path, result.BackupPath, info); err != nil {
 				return result, err
 			}
-			result.Success, result.Skipped = true, true
+			result.Success = true
 			return result, nil
 		}
+	}
+	if previousPath, duplicate := duplicateSources[image.Path]; duplicate {
+		result.Success = true
+		result.Skipped = true
+		result.Message = fmt.Sprintf("ข้ามไฟล์นี้เพราะชื่อไฟล์ซ้ำกับ %s และเก็บต้นฉบับไว้", previousPath)
+		return result, nil
 	}
 
 	if err := analysis.ValidateImage(image.Path); err != nil {
@@ -183,19 +190,14 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 		return result, err
 	}
 	copyDir := filepath.Join(destPath, filepath.Dir(relative))
-	startNumber := 0
-	if previous == nil {
-		expectedPath := filepath.Join(copyDir, image.Name)
-		if _, exists := duplicatePaths[filepath.Clean(expectedPath)]; exists {
-			startNumber = 1
-		}
-	}
-	if startNumber == 0 {
-		result, err = backup.CopyImage(image, copyDir)
-	} else {
-		result, err = backup.CopyImageFromNumber(image, copyDir, startNumber)
-	}
+	result, err = backup.CopyImage(image, copyDir)
 	if err != nil {
+		if errors.Is(err, backup.ErrDuplicateName) {
+			result.Success = true
+			result.Skipped = true
+			result.Message = fmt.Sprintf("ข้ามไฟล์นี้เพราะชื่อไฟล์ซ้ำกับ %s และเก็บต้นฉบับไว้", filepath.Join(copyDir, image.Name))
+			return result, nil
+		}
 		return result, err
 	}
 	// Hash หลัง CopyImage ตรวจ byte เทียบกับต้นฉบับแล้ว จึงใช้เป็น identity ของเนื้อหาได้
@@ -234,18 +236,16 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 	return result, nil
 }
 
-func (s *Service) backupPathsInDestination(destPath string) (map[string]struct{}, error) {
-	store, cancel := s.operation()
-	paths, err := store.BackupPathsInDestination(destPath)
-	cancel()
-	if err != nil {
-		return nil, err
+func alreadyBackedUp(photo *model.Photo, source os.FileInfo, destPath string) bool {
+	if photo == nil || photo.FileSize != source.Size() || !photo.SourceModifiedAt.Equal(source.ModTime()) {
+		return false
 	}
-	duplicates := make(map[string]struct{}, len(paths))
-	for _, path := range paths {
-		duplicates[filepath.Clean(path)] = struct{}{}
+	relative, err := filepath.Rel(destPath, photo.BackupPath)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return false
 	}
-	return duplicates, nil
+	destination, err := os.Lstat(photo.BackupPath)
+	return err == nil && destination.Mode().IsRegular() && destination.Size() == photo.FileSize
 }
 
 // ลบต้นทางหลังปลายทางและ DB พร้อมแล้วเท่านั้น
@@ -271,17 +271,4 @@ func (s *Service) finishMove(path, backupPath string, expected os.FileInfo) erro
 		return fmt.Errorf("ปลายทางและฐานข้อมูลพร้อมแล้ว แต่ลบต้นทางไม่ได้ กรุณาลองใหม่: %w", err)
 	}
 	return nil
-}
-
-// กรองประวัติด้วย path/ขนาด/เวลาก่อนเทียบ bytes จริงและย้ายให้จบ
-func alreadyBackedUp(photo *model.Photo, source os.FileInfo, destPath string) bool {
-	if photo == nil || photo.FileSize != source.Size() || !photo.SourceModifiedAt.Equal(source.ModTime()) {
-		return false
-	}
-	relative, err := filepath.Rel(destPath, photo.BackupPath)
-	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return false
-	}
-	destination, err := os.Lstat(photo.BackupPath)
-	return err == nil && destination.Mode().IsRegular() && destination.Size() == photo.FileSize
 }

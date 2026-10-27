@@ -18,6 +18,7 @@ type Store interface {
 	CreatePhoto(*model.Photo) error
 	FindBackup(string, string) (*model.Photo, error)
 	BackupPathsInDestination(string) ([]string, error)
+	PhotosInDestination(string) ([]model.Photo, error)
 	SaveBackup(*model.Photo) error
 	SaveAIAnalysis(uint, string, []string) error
 	FindPhoto(uint) (*model.Photo, error)

@@ -54,6 +54,23 @@ func (r *Repository) BackupPathsInDestination(destPath string) ([]string, error)
 	return paths, nil
 }
 
+func (r *Repository) PhotosInDestination(destPath string) ([]model.Photo, error) {
+	var photos []model.Photo
+	if err := r.db.Select("id, original_name, backup_path, file_size, content_hash, backed_up_at").Find(&photos).Error; err != nil {
+		return nil, err
+	}
+
+	selected := make([]model.Photo, 0, len(photos))
+	for _, photo := range photos {
+		relative, err := filepath.Rel(destPath, photo.BackupPath)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			continue
+		}
+		selected = append(selected, photo)
+	}
+	return selected, nil
+}
+
 // บันทึกรูป ประวัติ และแท็กสีให้สำเร็จพร้อมกันใน transaction เดียว
 func (r *Repository) SaveBackup(photo *model.Photo) error {
 	photo.ColorTag = strings.TrimSpace(photo.ColorTag)

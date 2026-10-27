@@ -6,6 +6,10 @@ export function AddTagToPhotos(arg1, arg2) {
   return window['go']['main']['App']['AddTagToPhotos'](arg1, arg2);
 }
 
+export function CheckBackup(arg1) {
+  return window['go']['main']['App']['CheckBackup'](arg1);
+}
+
 export function DeleteTag(arg1) {
   return window['go']['main']['App']['DeleteTag'](arg1);
 }

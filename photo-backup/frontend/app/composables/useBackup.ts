@@ -6,11 +6,12 @@ import {
   SelectSourceFolder,
   SelectDestFolder,
   StartBackup,
+  CheckBackup,
   GetAIQueueStatus,
   GetAIProviderStatus,
 } from "~~/wailsjs/go/main/App";
 import { EventsOn } from "~~/wailsjs/runtime/runtime";
-import type { ImageFile, BackupSummary, BackupProgress, AIQueueStatus, AIProviderStatus } from "~/types/backup";
+import type { ImageFile, BackupSummary, BackupProgress, AIQueueStatus, AIProviderStatus, IntegrityResult } from "~/types/backup";
 
 export function useBackup() {
   ensureProgressListener();
@@ -108,7 +109,11 @@ export function useBackup() {
 
     try {
       const selectedPath = await SelectDestFolder();
-      if (selectedPath) destPath.value = selectedPath;
+      if (selectedPath) {
+        destPath.value = selectedPath;
+        integrityDone.value = false;
+        integrityResults.value = [];
+      }
     } catch (error) {
       errorMessage.value = String(error || "ไม่สามารถเลือกโฟลเดอร์ได้");
     }
@@ -117,6 +122,26 @@ export function useBackup() {
   function clearDestFolder() {
     destPath.value = "";
     settingsMessage.value = "";
+    integrityDone.value = false;
+    integrityResults.value = [];
+  }
+
+  async function checkDestination() {
+    if (!destPath.value) {
+      errorMessage.value = "กรุณาเลือกโฟลเดอร์ปลายทางก่อนตรวจสอบ";
+      return;
+    }
+    errorMessage.value = "";
+    integrityLoading.value = true;
+    integrityDone.value = false;
+    try {
+      integrityResults.value = (await CheckBackup(destPath.value)) ?? [];
+      integrityDone.value = true;
+    } catch (error) {
+      errorMessage.value = String(error || "ตรวจสอบไฟล์ปลายทางไม่สำเร็จ");
+    } finally {
+      integrityLoading.value = false;
+    }
   }
 
   async function saveSettings() {
@@ -179,6 +204,8 @@ export function useBackup() {
     progressName.value = "";
     backupStartedAt.value = null;
     elapsedMs.value = 0;
+    integrityDone.value = false;
+    integrityResults.value = [];
     backupSummary.value = {
       total: 0,
       success: 0,
@@ -208,6 +235,9 @@ export function useBackup() {
     progressTotal,
     progressName,
     backupSummary,
+    integrityLoading,
+    integrityDone,
+    integrityResults,
     progressPercent,
     elapsedMs,
     elapsedLabel,
@@ -224,6 +254,7 @@ export function useBackup() {
     clearSourceFolder,
     chooseDestFolder,
     clearDestFolder,
+    checkDestination,
     saveSettings,
     startBackup,
     resetBackupState,
@@ -272,6 +303,9 @@ const backupSummary = ref<BackupSummary>({
   failed: 0,
   results: [],
 });
+const integrityLoading = ref(false);
+const integrityDone = ref(false);
+const integrityResults = ref<IntegrityResult[]>([]);
 const aiQueueStatus = ref<AIQueueStatus>({
   queued: 0,
   processing: 0,
