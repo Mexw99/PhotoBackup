@@ -27,6 +27,14 @@
       </button>
     </div>
 
+    <div v-if="missingPhotoCount > 0" class="state-banner missing-banner" role="status">
+      <span class="banner-icon">⚠️</span>
+      <div class="banner-content">
+        <strong>พบไฟล์ Backup หาย {{ missingPhotoCount }} รายการ</strong>
+        <p>ข้อมูล Tag และคำอธิบายยังคงอยู่ในฐานข้อมูล แต่ไม่พบไฟล์ภาพที่ตำแหน่งเดิม</p>
+      </div>
+    </div>
+
     <!-- แผงค้นหาและตัวกรอง -->
     <section class="panel search-controls-panel">
       <form class="text-search" @submit.prevent="executeSearch">
@@ -95,6 +103,9 @@
             <span class="photo-card-path" :title="photo.backupPath">
               {{ photo.backupPath }}
             </span>
+            <span v-if="!photo.backupAvailable" class="missing-file-label">
+              ⚠️ ไม่พบไฟล์ Backup
+            </span>
 
             <div class="photo-card-tags">
               <span v-for="tag in photo.tags" :key="tag.id" class="tag-chip"
@@ -142,6 +153,7 @@ const {
   executeSearch,
   toggleTag,
   openPhotoDetail,
+  missingPhotoCount,
 } = usePhotoSearch();
 </script>
 
@@ -217,6 +229,26 @@ const {
   font-size: 0.85rem;
   color: #475569;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.missing-banner {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  color: #9a3412;
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+}
+
+.missing-banner p {
+  margin: 4px 0 0;
+}
+
+.missing-file-label {
+  color: #b45309;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .stat-badge strong {

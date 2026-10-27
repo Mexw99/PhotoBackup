@@ -23,6 +23,9 @@
           <strong>{{ photo.originalName }}</strong>
           <small>{{ photo.backedUpAt }}</small>
           <small class="path">{{ photo.backupPath }}</small>
+          <small v-if="!photo.backupAvailable" class="missing-file-label">
+            ⚠️ ไม่พบไฟล์ Backup
+          </small>
         </div>
         <div class="photo-tags">
           <span v-for="tag in photo.tags" :key="tag.id" class="tag-chip">
@@ -148,5 +151,10 @@ function togglePhoto(photoID: number, checked: boolean) {
 }
 .path {
   overflow-wrap: anywhere;
+}
+
+.missing-file-label {
+  color: #b45309;
+  font-weight: 700;
 }
 </style>

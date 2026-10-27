@@ -1,4 +1,4 @@
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { GetTagCloud, SearchPhotoLibrary } from "~~/wailsjs/go/main/App";
 import type { PhotoItem, TagCloudItem } from "~/types/photo";
 
@@ -11,6 +11,9 @@ export function usePhotoSearch() {
   const searching = ref(false);
   const error = ref<string | null>(null);
   const selectedPhotoForModal = ref<PhotoItem | null>(null);
+  const missingPhotoCount = computed(() =>
+    photos.value.filter((photo) => !photo.backupAvailable).length,
+  );
   let searchRequest = 0;
 
   function isTagMatched(tagName: string) {
@@ -94,5 +97,6 @@ export function usePhotoSearch() {
     executeSearch,
     toggleTag,
     openPhotoDetail,
+    missingPhotoCount,
   };
 }

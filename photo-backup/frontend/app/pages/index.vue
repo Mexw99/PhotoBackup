@@ -51,6 +51,9 @@
               <strong>{{ photo.originalName }}</strong>
               <small>{{ photo.backedUpAt }}</small>
               <small>{{ photo.backupPath }}</small>
+              <small v-if="!photo.backupAvailable" class="missing-file-label">
+                ⚠️ ไม่พบไฟล์ Backup
+              </small>
             </div>
           </div>
         </div>
@@ -96,6 +99,11 @@ const {
 <style scoped>
 .dashboard {
   color: #172033;
+}
+
+.missing-file-label {
+  color: #b45309;
+  font-weight: 700;
 }
 
 .intro {

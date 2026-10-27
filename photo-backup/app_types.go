@@ -6,13 +6,15 @@ type TagSummary struct {
 }
 
 type PhotoSummary struct {
-	ID           uint   `json:"id"`
-	OriginalName string `json:"originalName"`
-	BackupPath   string `json:"backupPath"`
-	BackedUpAt   string `json:"backedUpAt"`
-	Thumbnail    string `json:"thumbnail"`
-	ColorTag     string `json:"colorTag"`
-	Description  string `json:"description"`
+	ID              uint   `json:"id"`
+	OriginalName    string `json:"originalName"`
+	BackupPath      string `json:"backupPath"`
+	BackedUpAt      string `json:"backedUpAt"`
+	Thumbnail       string `json:"thumbnail"`
+	ColorTag        string `json:"colorTag"`
+	Description     string `json:"description"`
+	BackupAvailable bool   `json:"backupAvailable"`
+	BackupStatus    string `json:"backupStatus"`
 }
 
 type TagCloudItem struct {
@@ -22,14 +24,16 @@ type TagCloudItem struct {
 }
 
 type TaggedPhotoSummary struct {
-	ID           uint         `json:"id"`
-	OriginalName string       `json:"originalName"`
-	BackupPath   string       `json:"backupPath"`
-	BackedUpAt   string       `json:"backedUpAt"`
-	Thumbnail    string       `json:"thumbnail"`
-	ColorTag     string       `json:"colorTag"`
-	Description  string       `json:"description"`
-	Tags         []TagSummary `json:"tags"`
+	ID              uint         `json:"id"`
+	OriginalName    string       `json:"originalName"`
+	BackupPath      string       `json:"backupPath"`
+	BackedUpAt      string       `json:"backedUpAt"`
+	Thumbnail       string       `json:"thumbnail"`
+	ColorTag        string       `json:"colorTag"`
+	Description     string       `json:"description"`
+	BackupAvailable bool         `json:"backupAvailable"`
+	BackupStatus    string       `json:"backupStatus"`
+	Tags            []TagSummary `json:"tags"`
 }
 
 type BackupSettings struct {

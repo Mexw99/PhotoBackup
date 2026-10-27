@@ -107,6 +107,8 @@ export namespace main {
 	    thumbnail: string;
 	    colorTag: string;
 	    description: string;
+	    backupAvailable: boolean;
+	    backupStatus: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new PhotoSummary(source);
@@ -121,6 +123,8 @@ export namespace main {
 	        this.thumbnail = source["thumbnail"];
 	        this.colorTag = source["colorTag"];
 	        this.description = source["description"];
+	        this.backupAvailable = source["backupAvailable"];
+	        this.backupStatus = source["backupStatus"];
 	    }
 	}
 	export class TagCloudItem {
@@ -161,6 +165,8 @@ export namespace main {
 	    thumbnail: string;
 	    colorTag: string;
 	    description: string;
+	    backupAvailable: boolean;
+	    backupStatus: string;
 	    tags: TagSummary[];
 	
 	    static createFrom(source: any = {}) {
@@ -176,6 +182,8 @@ export namespace main {
 	        this.thumbnail = source["thumbnail"];
 	        this.colorTag = source["colorTag"];
 	        this.description = source["description"];
+	        this.backupAvailable = source["backupAvailable"];
+	        this.backupStatus = source["backupStatus"];
 	        this.tags = this.convertValues(source["tags"], TagSummary);
 	    }
 	

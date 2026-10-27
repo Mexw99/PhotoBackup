@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"photo-backup/model"
 	"photo-backup/service"
@@ -33,13 +34,15 @@ func (a *App) GetRecentPhotos(limit int) []PhotoSummary {
 	result := make([]PhotoSummary, 0, len(photos))
 	for _, photo := range photos {
 		result = append(result, PhotoSummary{
-			ID:           photo.ID,
-			OriginalName: photo.OriginalName,
-			BackupPath:   photo.BackupPath,
-			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
-			Thumbnail:    service.ReadThumbnailDataURL(photo.BackupPath),
-			ColorTag:     photo.ColorTag,
-			Description:  photo.Description,
+			ID:              photo.ID,
+			OriginalName:    photo.OriginalName,
+			BackupPath:      photo.BackupPath,
+			BackedUpAt:      photo.BackedUpAt.Format("2006-01-02 15:04:05"),
+			Thumbnail:       service.ReadThumbnailDataURL(photo.BackupPath),
+			ColorTag:        photo.ColorTag,
+			Description:     photo.Description,
+			BackupAvailable: backupFileAvailable(photo.BackupPath),
+			BackupStatus:    backupFileStatus(photo.BackupPath),
 		})
 	}
 	return result
@@ -87,15 +90,29 @@ func taggedPhotoSummaries(photos []model.Photo) []TaggedPhotoSummary {
 			tags = append(tags, TagSummary{ID: tag.ID, Name: tag.Name})
 		}
 		result = append(result, TaggedPhotoSummary{
-			ID:           photo.ID,
-			OriginalName: photo.OriginalName,
-			BackupPath:   photo.BackupPath,
-			BackedUpAt:   photo.BackedUpAt.Format("2006-01-02 15:04:05"),
-			Thumbnail:    service.ReadThumbnailDataURL(photo.BackupPath),
-			ColorTag:     photo.ColorTag,
-			Description:  photo.Description,
-			Tags:         tags,
+			ID:              photo.ID,
+			OriginalName:    photo.OriginalName,
+			BackupPath:      photo.BackupPath,
+			BackedUpAt:      photo.BackedUpAt.Format("2006-01-02 15:04:05"),
+			Thumbnail:       service.ReadThumbnailDataURL(photo.BackupPath),
+			ColorTag:        photo.ColorTag,
+			Description:     photo.Description,
+			BackupAvailable: backupFileAvailable(photo.BackupPath),
+			BackupStatus:    backupFileStatus(photo.BackupPath),
+			Tags:            tags,
 		})
 	}
 	return result
+}
+
+func backupFileAvailable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
+func backupFileStatus(path string) string {
+	if backupFileAvailable(path) {
+		return "available"
+	}
+	return "missing"
 }

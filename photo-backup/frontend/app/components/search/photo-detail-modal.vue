@@ -35,6 +35,10 @@
         </header>
 
         <div class="modal-body">
+          <div v-if="!photo.backupAvailable" class="missing-file-alert" role="alert">
+            ⚠️ ไม่พบไฟล์ Backup ที่ตำแหน่งนี้แล้ว แต่ข้อมูล Tag และคำอธิบายยังคงอยู่
+          </div>
+
           <div v-if="photo.thumbnail" class="modal-image-preview">
             <img :src="photo.thumbnail" :alt="photo.originalName" />
           </div>
@@ -222,6 +226,14 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 16px;
   overflow-y: auto;
+}
+
+.missing-file-alert {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #9a3412;
+  padding: 10px 12px;
 }
 
 .modal-image-preview {

@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"photo-backup/database"
@@ -183,6 +184,31 @@ func TestFinishMoveKeepsSourceWhenDestinationDisappears(t *testing.T) {
 	data, err := os.ReadFile(path)
 	if err != nil || !bytes.Equal(data, contents) {
 		t.Fatalf("source was lost: %v", err)
+	}
+}
+
+func TestFinishMoveReportsSourceDeletedDuringBackup(t *testing.T) {
+	s, _ := newMoveService(t)
+	path := filepath.Join(t.TempDir(), "deleted.png")
+	contents := writeMovePhoto(t, path)
+	previous, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(t.TempDir(), "deleted.png")
+	if err := os.WriteFile(destination, contents, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.finishMove(path, destination, previous)
+	if err == nil || !strings.Contains(err.Error(), "ไฟล์ต้นทางหายไประหว่าง Backup") {
+		t.Fatalf("expected explicit source-deleted error, got %v", err)
+	}
+	if _, statErr := os.Stat(destination); statErr != nil {
+		t.Fatalf("verified destination should remain: %v", statErr)
 	}
 }
 

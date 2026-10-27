@@ -132,7 +132,10 @@ func (s *Service) backupPhoto(image backup.ImageFile, sourcePath, destPath strin
 	result := backup.BackupResult{OriginalName: image.Name, OriginalPath: image.Path, FileSize: image.Size}
 	info, err := os.Stat(image.Path)
 	if err != nil {
-		return result, err
+		if os.IsNotExist(err) {
+			return result, fmt.Errorf("ไม่พบไฟล์ต้นทางระหว่าง Backup: %s", image.Name)
+		}
+		return result, fmt.Errorf("เปิดไฟล์ต้นทางไม่ได้ (%s): %w", image.Name, err)
 	}
 	image.Size, result.FileSize = info.Size(), info.Size()
 	store, cancel := s.operation()
@@ -256,7 +259,7 @@ func (s *Service) finishMove(path, backupPath string, expected os.FileInfo) erro
 	}
 	current, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		return nil
+		return fmt.Errorf("ไฟล์ต้นทางหายไประหว่าง Backup จึงไม่ถือว่าสำเร็จ: %s", filepath.Base(path))
 	}
 	if err != nil {
 		return err
