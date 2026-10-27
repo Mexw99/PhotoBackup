@@ -1,4 +1,5 @@
 build/bin
+build/releases/
 node_modules*
 frontend/dist
 frontend/node_modules*
@@ -18,6 +19,8 @@ dist/
 yolo_worker.spec
 caption_worker.spec
 photo-backup.db-*
+.env
+!.env.example
 
 # Portable local AI assets intentionally committed for development/testing.
 !models/
